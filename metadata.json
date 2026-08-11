@@ -1,0 +1,6 @@
+{
+  "name": "GoAPKDownload - Safe APK Downloader & Original Mod Mirror",
+  "description": "Looking for a safe alternative to APKPure, LiteAPKs, & APKMirror? Download 100% secure, malware-free original Android apps & modded games free.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
