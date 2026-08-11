@@ -1,12 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { X, PlusCircle, CheckCircle, Lock, ShieldAlert, KeyRound, Upload, FileUp, FileCheck, Image as ImageIcon, Cloud } from 'lucide-react';
+import { X, PlusCircle, CheckCircle, Lock, ShieldAlert, KeyRound, Upload, FileUp, FileCheck, Image as ImageIcon, Cloud, Loader2 } from 'lucide-react';
 import { AppItem, AppCategory } from '../types';
-import { uploadApkFileViaApi } from '../services/googleDriveClient';
+import { uploadAppComponentsViaApi } from '../services/googleDriveClient';
 
 interface SubmitAppModalProps {
   onClose: () => void;
   darkMode: boolean;
-  onSubmitApp: (newApp: AppItem) => void;
+  onSubmitApp: () => void;
 }
 
 const CATEGORIES: AppCategory[] = [
@@ -23,6 +23,7 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
   const [pinError, setPinError] = useState('');
 
   const [apkFile, setApkFile] = useState<File | null>(null);
+  const [iconFile, setIconFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [packageName, setPackageName] = useState('');
   const [category, setCategory] = useState<AppCategory>('Tools');
@@ -30,12 +31,13 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
   const [description, setDescription] = useState('');
   const [size, setSize] = useState('45 MB');
   const [minAndroid, setMinAndroid] = useState('Android 8.0+');
-  const [iconUrl, setIconUrl] = useState('');
+  const [version, setVersion] = useState('1.0.0');
   const [isUploadingDrive, setIsUploadingDrive] = useState(false);
   const [driveUploadSuccess, setDriveUploadSuccess] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const iconInputRef = useRef<HTMLInputElement>(null);
 
   const handleVerifyPin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,9 +58,20 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
     const sizeInMB = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
     setSize(sizeInMB);
 
+    // Auto-fill version if found in file name
+    const versionMatch = file.name.match(/[-_]v?(\d+\.\d+(?:\.\d+)*)/i);
+    if (versionMatch) {
+      setVersion(versionMatch[1]);
+    }
+
     // Auto-fill title if empty
     if (!title) {
-      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      // Strip version, extension, and replace dash/underscore
+      const cleanName = file.name
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
+        .replace(/[-_]/g, ' ')
+        .trim();
       const capitalized = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
       setTitle(capitalized);
     }
@@ -72,75 +85,34 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !packageName.trim()) return;
-
-    let finalDownloadUrl = '#';
-    let gdriveFileId = '';
-
-    // Upload APK file to Google Drive if selected
-    if (apkFile) {
-      setIsUploadingDrive(true);
-      try {
-        const driveResult = await uploadApkFileViaApi(apkFile);
-        if (driveResult && driveResult.fileId) {
-          finalDownloadUrl = driveResult.directDownloadUrl || driveResult.webViewLink;
-          gdriveFileId = driveResult.fileId;
-          setDriveUploadSuccess(driveResult.fileName);
-        }
-      } catch (err) {
-        console.warn('Google Drive upload error, using local fallback:', err);
-      } finally {
-        setIsUploadingDrive(false);
-      }
+    if (!apkFile) {
+      alert('Please select an APK file to upload.');
+      return;
+    }
+    if (!title.trim()) {
+      alert('App Title is required.');
+      return;
     }
 
-    const defaultIcon = iconUrl.trim() || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=256&q=80';
-
-    const newAppItem: AppItem = {
-      id: `custom-${Date.now()}`,
-      title,
-      packageName,
-      category,
-      rating: 5.0,
-      totalReviews: 1,
-      downloadsCount: 'New',
-      downloadsNumeric: 10,
-      icon: defaultIcon,
-      developer: developer || 'Site Administrator',
-      minAndroid,
-      size,
-      updatedDate: new Date().toISOString().split('T')[0],
-      isVerified: true,
-      tags: [category, 'Admin Uploaded', 'Google Drive Hosted'],
-      description: description || 'Administrator published Android package file hosted securely on Google Drive.',
-      longDescription: description || 'Official Android package (.apk) stored and hosted directly on Google Drive cloud storage.',
-      screenshots: [defaultIcon],
-      safetyChecks: [
-        { label: 'Package Signature Verified', status: 'passed', description: 'APK checksum and developer keys match official hashes.' },
-        { label: 'Malware Scan Clean', status: 'passed', description: 'Zero malicious vectors detected across VirusTotal scanners.' },
-        { label: 'Google Drive Cloud Storage Verified', status: 'passed', description: 'APK binary stored and virus-scanned on Google Drive cloud.' }
-      ],
-      versions: [
-        {
-          versionName: '1.0.0',
-          versionCode: 100,
-          releaseDate: new Date().toISOString().split('T')[0],
-          fileSize: size,
-          minAndroid,
-          sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
-          changelog: ['Initial Admin APK package upload to Google Drive'],
-          downloadUrl: finalDownloadUrl !== '#' ? finalDownloadUrl : (gdriveFileId ? `/api/drive/download/${gdriveFileId}` : '#')
-        }
-      ],
-      reviews: []
-    };
-
-    onSubmitApp(newAppItem);
-    setIsSubmitted(true);
-    setTimeout(() => {
-      setIsSubmitted(false);
-      onClose();
-    }, 2000);
+    setIsUploadingDrive(true);
+    try {
+      const driveResult = await uploadAppComponentsViaApi(apkFile, iconFile, title, version);
+      if (driveResult && driveResult.success) {
+        setDriveUploadSuccess(driveResult.appName);
+        setIsSubmitted(true);
+        // Refresh catalog in background
+        onSubmitApp();
+        setTimeout(() => {
+          setIsSubmitted(false);
+          onClose();
+        }, 2000);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(`Failed to upload to Google Drive: ${err.message || 'Unknown network error'}`);
+    } finally {
+      setIsUploadingDrive(false);
+    }
   };
 
   return (
@@ -328,18 +300,17 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as AppCategory)}
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Version Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                  placeholder="e.g. 1.0.10"
                   className={`w-full p-2.5 rounded-xl border text-xs outline-none ${
                     darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-100 border-slate-200 text-slate-900'
                   }`}
-                >
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div>
@@ -358,36 +329,53 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">File Size</label>
-                <input
-                  type="text"
-                  value={size}
-                  onChange={(e) => setSize(e.target.value)}
-                  placeholder="e.g. 35.4 MB"
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as AppCategory)}
                   className={`w-full p-2.5 rounded-xl border text-xs outline-none ${
                     darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-100 border-slate-200 text-slate-900'
                   }`}
-                />
+                >
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">App Icon Image URL</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">App Icon File (.png, .jpg)</label>
                 <input
-                  type="url"
-                  value={iconUrl}
-                  onChange={(e) => setIconUrl(e.target.value)}
-                  placeholder="https://... (Optional)"
-                  className={`w-full p-2.5 rounded-xl border text-xs outline-none ${
-                    darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-100 border-slate-200 text-slate-900'
-                  }`}
+                  ref={iconInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setIconFile(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
                 />
+                <div
+                  onClick={() => iconInputRef.current?.click()}
+                  className={`w-full p-2 rounded-xl border text-xs outline-none cursor-pointer flex items-center justify-between transition-colors ${
+                    iconFile
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                      : darkMode
+                      ? 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                      : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200/50'
+                  }`}
+                >
+                  <span className="truncate max-w-[150px]">{iconFile ? iconFile.name : 'Select App Icon...'}</span>
+                  <ImageIcon className="w-4 h-4 text-emerald-500 shrink-0" />
+                </div>
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Description</label>
               <textarea
-                rows={3}
+                rows={2}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief summary of key features and Android permissions required..."
@@ -399,9 +387,21 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
 
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm shadow-lg transition-colors cursor-pointer"
+              disabled={isUploadingDrive}
+              className={`w-full py-3 rounded-2xl font-black text-sm shadow-lg transition-colors flex items-center justify-center gap-2 cursor-pointer ${
+                isUploadingDrive
+                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+              }`}
             >
-              Publish APK to Live Store
+              {isUploadingDrive ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                  <span>Publishing APK &amp; Icon to Google Drive...</span>
+                </>
+              ) : (
+                <span>Publish APK to Live Store</span>
+              )}
             </button>
           </form>
         )}

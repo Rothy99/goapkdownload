@@ -51,11 +51,6 @@ export const Footer: React.FC<FooterProps> = ({
                   Android Installation Guide
                 </button>
               </li>
-              <li>
-                <button onClick={onOpenSubmit} className="hover:text-amber-400 text-amber-500/90 font-medium transition-colors cursor-pointer flex items-center gap-1">
-                  <span>Admin APK Upload</span>
-                </button>
-              </li>
             </ul>
           </div>
 

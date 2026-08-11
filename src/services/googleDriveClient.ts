@@ -7,6 +7,24 @@ export interface DriveUploadResult {
   createdTime?: string;
 }
 
+export interface DriveAppUploadResult {
+  success: boolean;
+  appName: string;
+  folderId: string;
+  apk: {
+    id: string;
+    name: string;
+    size: string;
+    webViewLink: string;
+    directDownloadUrl: string;
+  };
+  icon: {
+    id: string;
+    name: string;
+    webViewLink: string;
+  } | null;
+}
+
 /**
  * Client-side helper to upload an APK file through the app backend API endpoint
  */
@@ -37,4 +55,43 @@ export async function uploadApkFileViaApi(apkFile: File): Promise<DriveUploadRes
     webViewLink: data.file.webViewLink,
     createdTime: data.file.createdTime,
   };
+}
+
+/**
+ * Client-side helper to upload both APK file and Icon image into a dedicated app folder in Google Drive
+ */
+export async function uploadAppComponentsViaApi(
+  apkFile: File,
+  iconFile: File | null,
+  appName: string,
+  version: string
+): Promise<DriveAppUploadResult> {
+  const formData = new FormData();
+  formData.append('apkFile', apkFile);
+  if (iconFile) {
+    formData.append('iconFile', iconFile);
+  }
+  if (appName) {
+    formData.append('appName', appName);
+  }
+  if (version) {
+    formData.append('version', version);
+  }
+
+  const response = await fetch('/api/drive/upload-app', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.success) {
+    throw new Error(data.error || 'Server returned invalid app upload response');
+  }
+
+  return data;
 }

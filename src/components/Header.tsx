@@ -282,20 +282,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Request APK</span>
             </button>
 
-            <div 
-              title="Google Drive Cloud Storage Active"
-              className={`hidden lg:flex items-center gap-1.5 px-3 h-10 text-xs font-bold rounded-xl border ${
-                darkMode 
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' 
-                  : 'border-emerald-500/30 bg-emerald-50 text-emerald-700'
-              }`}
-            >
-              <Cloud className="w-4 h-4 text-emerald-500" />
-              <span>Drive Storage</span>
-            </div>
-
-
-
             {/* Dark Mode Toggle Button (Desktop) */}
             <button
               onClick={() => setDarkMode(!darkMode)}
