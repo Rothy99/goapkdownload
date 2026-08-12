@@ -327,12 +327,14 @@ app.get('/api/drive/file/:fileId', async (c) => {
     const contentType = metadata.mimeType || 'application/octet-stream';
     const fileName = metadata.name || 'file';
 
-    c.header('Content-Type', contentType);
-    c.header('Content-Disposition', `inline; filename="\"${fileName}\""`);
-    c.header('Cache-Control', 'public, max-age=31536000, immutable');
-
-    // Stream the response body (ReadableStream) directly
-    return c.body(response.body);
+    return new Response(response.body, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `inline; filename="${encodeURIComponent(fileName)}"`,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      }
+    });
   } catch (error: any) {
     console.error('Error fetching file from Google Drive:', error);
     return c.json({ error: error.message || 'Failed to retrieve file from Google Drive' }, 500);
@@ -359,11 +361,13 @@ app.get('/api/drive/download/:fileId', async (c) => {
     const contentType = metadata.mimeType || 'application/vnd.android.package-archive';
     const fileName = metadata.name || 'app.apk';
 
-    c.header('Content-Type', contentType);
-    c.header('Content-Disposition', `attachment; filename="\"${fileName}\""`);
-
-    // Stream the response body (ReadableStream) directly
-    return c.body(response.body);
+    return new Response(response.body, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+      }
+    });
   } catch (error: any) {
     console.error('Error downloading file from Google Drive:', error);
     return c.json({ error: error.message || 'Failed to download file from Google Drive' }, 500);
