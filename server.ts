@@ -106,7 +106,7 @@ api.get('/drive/files', async (c) => {
     
     // 1. List items directly in the main folder to find subfolders
     const folderQuery = `'${folderId}' in parents and trashed = false`;
-    const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, webViewLink, webContentLink, size, createdTime)');
+    const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
     
     const items = initialList.files || [];
     const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
@@ -116,11 +116,12 @@ api.get('/drive/files', async (c) => {
     const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
     const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
 
-    const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, webViewLink, webContentLink, size, createdTime, parents)');
+    const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
 
     const responseData = {
       success: true,
       rootFolderId: folderId,
+      subfolders: subfolders,
       files: filesList.files || [],
     };
 

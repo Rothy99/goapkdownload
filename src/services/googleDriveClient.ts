@@ -71,6 +71,7 @@ export async function uploadAppComponentsViaApi(
   screenshotFiles: File[],
   appName: string,
   version: string,
+  description: string,
   onProgress?: (percent: number, statusText?: string) => void
 ): Promise<DriveAppUploadResult> {
   // 1. Fetch access token and root folder ID from the backend
@@ -95,8 +96,19 @@ export async function uploadAppComponentsViaApi(
 
   if (searchData.files && searchData.files.length > 0) {
     subfolderId = searchData.files[0].id;
+    // Update existing folder description
+    await fetch(`https://www.googleapis.com/drive/v3/files/${subfolderId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        description: description
+      })
+    });
   } else {
-    // Create the folder
+    // Create the folder with description
     const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
       method: 'POST',
       headers: {
@@ -106,7 +118,8 @@ export async function uploadAppComponentsViaApi(
       body: JSON.stringify({
         name: appName,
         mimeType: 'application/vnd.google-apps.folder',
-        parents: [rootFolderId]
+        parents: [rootFolderId],
+        description: description
       })
     });
     if (!createRes.ok) throw new Error('Failed to create app folder in Google Drive');
@@ -140,10 +153,18 @@ export async function uploadAppComponentsViaApi(
   if (iconFile) {
     if (onProgress) onProgress(100, 'Uploading App Icon...');
     const iconBuffer = await iconFile.arrayBuffer();
+    
+    // Force filename to start with 'icon' so the frontend detects it as the logo
+    let iconName = 'icon.png';
+    if (iconFile.name) {
+      const ext = iconFile.name.split('.').pop();
+      iconName = `icon.${ext || 'png'}`;
+    }
+
     iconResult = await clientUploadFileDirect(
       token,
       new Uint8Array(iconBuffer),
-      iconFile.name || 'icon.png',
+      iconName,
       iconFile.type || 'image/png',
       subfolderId
     );

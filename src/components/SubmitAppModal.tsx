@@ -108,6 +108,7 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
         screenshotFiles,
         title,
         version,
+        description,
         (percent, statusText) => {
           setUploadProgress(percent);
           if (statusText) {

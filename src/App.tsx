@@ -155,6 +155,7 @@ export default function App() {
       if (data.success && data.files) {
         const allFiles = data.files;
         const rootFolderId = data.rootFolderId;
+        const subfolders = data.subfolders || [];
 
         // 1. Separate APKs/files and images
         const apkFiles = allFiles.filter((file: any) => 
@@ -220,12 +221,18 @@ export default function App() {
 
           const computedCategory = getCategoryFromFileName(mainFile.name || '');
 
-          // Find associated image
+          // Find associated subfolder description
+          let appDescription = `Android package file (${mainFile.name}) hosted securely on Google Drive.`;
           const parentId = mainFile.parents && mainFile.parents[0];
           let iconUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=256&q=80';
           let screenshots = [iconUrl];
 
           if (parentId && parentId !== rootFolderId) {
+            const subfolder = subfolders.find((sf: any) => sf.id === parentId);
+            if (subfolder && subfolder.description) {
+              appDescription = subfolder.description;
+            }
+
             const folderImages = imageFiles.filter((img: any) => 
               img.parents && img.parents.includes(parentId)
             );
@@ -238,8 +245,13 @@ export default function App() {
 
               iconUrl = `/api/drive/file/${iconFile.id}`;
               
-              // Screenshots are all images in this folder
-              screenshots = folderImages.map((img: any) => `/api/drive/file/${img.id}`);
+              // Screenshots are all images in this folder except the icon itself
+              const nonIconImages = folderImages.filter((img: any) => img.id !== iconFile.id);
+              if (nonIconImages.length > 0) {
+                screenshots = nonIconImages.map((img: any) => `/api/drive/file/${img.id}`);
+              } else {
+                screenshots = [`/api/drive/file/${iconFile.id}`];
+              }
             }
           } else {
             const baseName = mainFile.name.replace(/\.[^/.]+$/, '').toLowerCase().split(/[-_]/)[0];
@@ -299,8 +311,8 @@ export default function App() {
             updatedDate: updatedDate,
             isVerified: true,
             tags: ['Google Drive', 'APK'],
-            description: `Android package file (${mainFile.name}) hosted securely on Google Drive.`,
-            longDescription: `Official Android package stored and hosted directly on Google Drive cloud storage. Verified safe and secure. Supports multiple versions: ${versions.map(v => v.versionName).join(', ')}.`,
+            description: appDescription,
+            longDescription: appDescription,
             screenshots: screenshots,
             safetyChecks: [
               { label: 'Google Drive Virus Scan', status: 'passed', description: 'Scanned clean by Google Drive built-in virus scanner.' },
