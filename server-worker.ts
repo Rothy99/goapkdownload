@@ -10,10 +10,29 @@ import {
   createDriveFolder,
 } from './server/googleDriveService';
 
-const app = new Hono<{ Bindings: { ASSETS: { fetch: typeof fetch } } }>();
+interface Bindings {
+  ASSETS: { fetch: typeof fetch };
+  CLIENT_ID?: string;
+  GOOGLE_CLIENT_ID?: string;
+  CLIENT_SECRET?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  REFRESH_TOKEN?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
+}
+
+const app = new Hono<{ Bindings: Bindings }>();
 
 // Enable CORS for frontend compatibility
 app.use('*', cors());
+
+// Helper to extract credentials from Cloudflare environment context
+function getCredentials(c: any) {
+  return {
+    clientId: c.env.CLIENT_ID || c.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: c.env.CLIENT_SECRET || c.env.GOOGLE_CLIENT_SECRET || '',
+    refreshToken: c.env.REFRESH_TOKEN || c.env.GOOGLE_REFRESH_TOKEN || '',
+  };
+}
 
 /**
  * GET /api/drive/status
@@ -21,7 +40,8 @@ app.use('*', cors());
  */
 app.get('/api/drive/status', async (c) => {
   try {
-    const token = await getAccessToken();
+    const creds = getCredentials(c);
+    const token = await getAccessToken(creds);
     const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota', {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -58,8 +78,9 @@ const CACHE_DURATION_MS = 15000; // Cache lists for 15 seconds
  * List all APK files uploaded to the GoAPKDownload Google Drive folder
  */
 app.get('/api/drive/files', async (c) => {
+  const creds = getCredentials(c);
   try {
-    await getAccessToken();
+    await getAccessToken(creds);
   } catch (e) {
     return c.json({ error: 'Google Drive is not configured.' }, 400);
   }
@@ -70,7 +91,7 @@ app.get('/api/drive/files', async (c) => {
   }
 
   try {
-    const token = await getAccessToken();
+    const token = await getAccessToken(creds);
     let folderId = cachedFolderId;
     if (!folderId) {
       folderId = await getOrCreateDriveFolder(token);
@@ -114,6 +135,7 @@ app.get('/api/drive/files', async (c) => {
  */
 app.post('/api/drive/upload', async (c) => {
   try {
+    const creds = getCredentials(c);
     const body = await c.req.parseBody();
     const file = body['apkFile'];
 
@@ -128,7 +150,9 @@ app.post('/api/drive/upload', async (c) => {
     const result = await uploadApkToDrive(
       buffer,
       fileName,
-      file.type || 'application/vnd.android.package-archive'
+      file.type || 'application/vnd.android.package-archive',
+      undefined,
+      creds
     );
 
     // Invalidate the cache on successful upload so the new file displays immediately
@@ -156,8 +180,9 @@ app.post('/api/drive/upload', async (c) => {
  * Upload an APK and an optional icon image to a dedicated app folder in Google Drive
  */
 app.post('/api/drive/upload-app', async (c) => {
+  const creds = getCredentials(c);
   try {
-    await getAccessToken();
+    await getAccessToken(creds);
   } catch (e) {
     return c.json({ error: 'Google Drive is not configured.' }, 400);
   }
@@ -190,7 +215,7 @@ app.post('/api/drive/upload-app', async (c) => {
       appName = 'Unknown App';
     }
 
-    const token = await getAccessToken();
+    const token = await getAccessToken(creds);
     // 1. Get root folder ID
     const rootFolderId = await getOrCreateDriveFolder(token);
 
@@ -224,7 +249,8 @@ app.post('/api/drive/upload-app', async (c) => {
       apkBuffer,
       apkName,
       apkFile.type || 'application/vnd.android.package-archive',
-      subfolderId
+      subfolderId,
+      creds
     );
 
     // 4. Upload optional icon file to the same subfolder
@@ -235,7 +261,8 @@ app.post('/api/drive/upload-app', async (c) => {
         iconBuffer,
         iconFile.name || 'icon.png',
         iconFile.type || 'image/png',
-        subfolderId
+        subfolderId,
+        creds
       );
     }
 
@@ -276,7 +303,8 @@ app.get('/api/drive/file/:fileId', async (c) => {
   }
 
   try {
-    const token = await getAccessToken();
+    const creds = getCredentials(c);
+    const token = await getAccessToken(creds);
     const metadata = await getDriveFileMetadata(token, fileId, 'name, mimeType');
     const response = await fetchDriveFileStream(token, fileId);
 
@@ -284,7 +312,7 @@ app.get('/api/drive/file/:fileId', async (c) => {
     const fileName = metadata.name || 'file';
 
     c.header('Content-Type', contentType);
-    c.header('Content-Disposition', `inline; filename="${fileName}"`);
+    c.header('Content-Disposition', `inline; filename="\"${fileName}\""`);
     c.header('Cache-Control', 'public, max-age=31536000, immutable');
 
     // Stream the response body (ReadableStream) directly
@@ -307,7 +335,8 @@ app.get('/api/drive/download/:fileId', async (c) => {
   }
 
   try {
-    const token = await getAccessToken();
+    const creds = getCredentials(c);
+    const token = await getAccessToken(creds);
     const metadata = await getDriveFileMetadata(token, fileId, 'name, mimeType');
     const response = await fetchDriveFileStream(token, fileId);
 
@@ -315,7 +344,7 @@ app.get('/api/drive/download/:fileId', async (c) => {
     const fileName = metadata.name || 'app.apk';
 
     c.header('Content-Type', contentType);
-    c.header('Content-Disposition', `attachment; filename="${fileName}"`);
+    c.header('Content-Disposition', `attachment; filename="\"${fileName}\""`);
 
     // Stream the response body (ReadableStream) directly
     return c.body(response.body);

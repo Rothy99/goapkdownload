@@ -7,22 +7,20 @@ export interface DriveUploadResult {
   createdTime?: string;
 }
 
-/**
- * Gets environment variables from either process.env or a custom cloudflare worker context
- */
-function getEnvConfig(): { clientId: string; clientSecret: string; refreshToken: string } {
-  const clientId = process.env.CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
-  const clientSecret = process.env.CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '';
-  const refreshToken = process.env.REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN || '';
-
-  return { clientId, clientSecret, refreshToken };
+export interface DriveCredentials {
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
 }
 
 /**
  * Requests a new access token from Google OAuth API using the refresh token
  */
-export async function getAccessToken(): Promise<string> {
-  const { clientId, clientSecret, refreshToken } = getEnvConfig();
+export async function getAccessToken(credentials?: DriveCredentials): Promise<string> {
+  const clientId = credentials?.clientId || process.env.CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+  const clientSecret = credentials?.clientSecret || process.env.CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '';
+  const refreshToken = credentials?.refreshToken || process.env.REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN || '';
+
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error('Google Drive OAuth credentials missing (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN)');
   }
@@ -154,16 +152,14 @@ export async function getOrCreateDriveFolder(token: string, folderName = 'GoAPKD
   return createDriveFolder(token, folderName);
 }
 
-/**
- * Uploads a file (APK or Image) to Google Drive in a single multipart request
- */
 export async function uploadApkToDrive(
   fileBuffer: ArrayBuffer | Uint8Array,
   fileName: string,
   mimeType: string = 'application/vnd.android.package-archive',
-  customFolderId?: string
+  customFolderId?: string,
+  credentials?: DriveCredentials
 ): Promise<DriveUploadResult> {
-  const token = await getAccessToken();
+  const token = await getAccessToken(credentials);
   const folderId = customFolderId || (await getOrCreateDriveFolder(token));
 
   const metadata = {
