@@ -169,29 +169,30 @@ export async function uploadApkToDrive(
   };
 
   const url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,size,createdTime';
-  
   const boundary = '-------314159265358979323846';
-  const delimiter = `\r\n--${boundary}\r\n`;
-  const closeDelimiter = `\r\n--${boundary}--`;
-
-  const metadataPart = 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata);
+  
+  const part1 = `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify(metadata) + `\r\n`;
+    
+  const part2Header = `--${boundary}\r\n` +
+    `Content-Type: ${mimeType}\r\n\r\n`;
+    
+  const part2Footer = `\r\n--${boundary}--`;
   
   const encoder = new TextEncoder();
-  const delimiterBytes = encoder.encode(delimiter);
-  const metadataPartBytes = encoder.encode(metadataPart);
-  const mediaHeaderBytes = encoder.encode(`\r\nContent-Type: ${mimeType}\r\n\r\n`);
-  const closeDelimiterBytes = encoder.encode(closeDelimiter);
+  const part1Bytes = encoder.encode(part1);
+  const part2HeaderBytes = encoder.encode(part2Header);
+  const part2FooterBytes = encoder.encode(part2Footer);
   
-  const totalLength = delimiterBytes.length + metadataPartBytes.length + delimiterBytes.length + mediaHeaderBytes.length + fileBuffer.byteLength + closeDelimiterBytes.length;
+  const totalLength = part1Bytes.length + part2HeaderBytes.length + fileBuffer.byteLength + part2FooterBytes.length;
   const bodyBytes = new Uint8Array(totalLength);
   
   let offset = 0;
-  bodyBytes.set(delimiterBytes, offset); offset += delimiterBytes.length;
-  bodyBytes.set(metadataPartBytes, offset); offset += metadataPartBytes.length;
-  bodyBytes.set(delimiterBytes, offset); offset += delimiterBytes.length;
-  bodyBytes.set(mediaHeaderBytes, offset); offset += mediaHeaderBytes.length;
+  bodyBytes.set(part1Bytes, offset); offset += part1Bytes.length;
+  bodyBytes.set(part2HeaderBytes, offset); offset += part2HeaderBytes.length;
   bodyBytes.set(new Uint8Array(fileBuffer), offset); offset += fileBuffer.byteLength;
-  bodyBytes.set(closeDelimiterBytes, offset);
+  bodyBytes.set(part2FooterBytes, offset);
 
   const res = await fetch(url, {
     method: 'POST',
