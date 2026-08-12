@@ -10,7 +10,7 @@ import {
   createDriveFolder,
 } from './server/googleDriveService';
 
-const app = new Hono();
+const app = new Hono<{ Bindings: { ASSETS: { fetch: typeof fetch } } }>();
 
 // Enable CORS for frontend compatibility
 app.use('*', cors());
@@ -322,6 +322,27 @@ app.get('/api/drive/download/:fileId', async (c) => {
   } catch (error: any) {
     console.error('Error downloading file from Google Drive:', error);
     return c.json({ error: error.message || 'Failed to download file from Google Drive' }, 500);
+  }
+});
+
+// Serve static assets and handle React SPA routing fallback
+app.get('*', async (c) => {
+  const path = c.req.path;
+  if (path.startsWith('/api')) {
+    return c.notFound();
+  }
+
+  try {
+    // Attempt to fetch from edge assets
+    const res = await c.env.ASSETS.fetch(c.req.raw);
+    if (res.status === 404) {
+      // Return SPA fallback (index.html)
+      const indexReq = new Request(new URL('/', c.req.url), c.req.raw);
+      return await c.env.ASSETS.fetch(indexReq);
+    }
+    return res;
+  } catch (err) {
+    return c.notFound();
   }
 });
 
