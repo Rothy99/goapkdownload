@@ -33,6 +33,7 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
   const [minAndroid, setMinAndroid] = useState('Android 8.0+');
   const [version, setVersion] = useState('1.0.0');
   const [isUploadingDrive, setIsUploadingDrive] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [driveUploadSuccess, setDriveUploadSuccess] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -95,8 +96,17 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
     }
 
     setIsUploadingDrive(true);
+    setUploadProgress(0);
     try {
-      const driveResult = await uploadAppComponentsViaApi(apkFile, iconFile, title, version);
+      const driveResult = await uploadAppComponentsViaApi(
+        apkFile,
+        iconFile,
+        title,
+        version,
+        (percent) => {
+          setUploadProgress(percent);
+        }
+      );
       if (driveResult && driveResult.success) {
         setDriveUploadSuccess(driveResult.appName);
         setIsSubmitted(true);
@@ -112,6 +122,7 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
       alert(`Failed to upload to Google Drive: ${err.message || 'Unknown network error'}`);
     } finally {
       setIsUploadingDrive(false);
+      setUploadProgress(null);
     }
   };
 
@@ -385,6 +396,26 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
               />
             </div>
 
+            {isUploadingDrive && uploadProgress !== null && (
+              <div className="w-full space-y-2 mb-3 bg-slate-950/20 border border-slate-700/30 rounded-2xl p-4">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-extrabold text-emerald-400 flex items-center gap-1.5">
+                    <Cloud className="w-3.5 h-3.5 animate-pulse" />
+                    {uploadProgress < 100 
+                      ? 'Uploading Files to Server...' 
+                      : 'Saving & Publishing to Google Drive...'}
+                  </span>
+                  <span className="font-black text-emerald-400">{uploadProgress}%</span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+                  <div 
+                    className="h-full bg-emerald-400 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isUploadingDrive}
@@ -396,8 +427,12 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
             >
               {isUploadingDrive ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Publishing APK &amp; Icon to Google Drive...</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>
+                    {uploadProgress !== null && uploadProgress < 100 
+                      ? `Uploading (${uploadProgress}%)...` 
+                      : 'Publishing... Please wait'}
+                  </span>
                 </>
               ) : (
                 <span>Publish APK to Live Store</span>
