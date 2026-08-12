@@ -114,7 +114,7 @@ api.get('/drive/files', async (c) => {
     // 2. Fetch files from root folder and all subfolders
     const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
     const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
-    const filesQuery = `(${parentQuery}) and trashed = false`;
+    const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
 
     const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, webViewLink, webContentLink, size, createdTime, parents)');
 
