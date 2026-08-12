@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { serve, type HttpBindings } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { cors } from 'hono/cors';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -19,6 +20,9 @@ const PORT = 3000;
 
 // API routes first
 const api = new Hono();
+
+// Enable CORS for frontend compatibility
+api.use('*', cors());
 
 /**
  * GET /api/drive/status
