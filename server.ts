@@ -59,6 +59,21 @@ api.get('/drive/status', async (c) => {
   }
 });
 
+/**
+ * GET /api/drive/token
+ * Generate temporary access token and root folder ID for direct client upload
+ */
+api.get('/drive/token', async (c) => {
+  try {
+    const token = await getAccessToken();
+    const folderId = await getOrCreateDriveFolder(token);
+    return c.json({ token, folderId });
+  } catch (error: any) {
+    console.error('Error generating client upload token:', error);
+    return c.json({ error: error.message || 'Failed to generate token' }, 500);
+  }
+});
+
 // Simple in-memory cache to avoid repeated slow Google Drive API calls
 let cachedFolderId: string | null = null;
 let cachedFilesResponse: any = null;
