@@ -24,6 +24,7 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
 
   const [apkFile, setApkFile] = useState<File | null>(null);
   const [iconFile, setIconFile] = useState<File | null>(null);
+  const [screenshotFiles, setScreenshotFiles] = useState<File[]>([]);
   const [title, setTitle] = useState('');
   const [packageName, setPackageName] = useState('');
   const [category, setCategory] = useState<AppCategory>('Tools');
@@ -34,11 +35,13 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
   const [version, setVersion] = useState('1.0.0');
   const [isUploadingDrive, setIsUploadingDrive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadStatusText, setUploadStatusText] = useState<string>('');
   const [driveUploadSuccess, setDriveUploadSuccess] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
+  const screenshotsInputRef = useRef<HTMLInputElement>(null);
 
   const handleVerifyPin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,14 +100,19 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
 
     setIsUploadingDrive(true);
     setUploadProgress(0);
+    setUploadStatusText('Initializing upload...');
     try {
       const driveResult = await uploadAppComponentsViaApi(
         apkFile,
         iconFile,
+        screenshotFiles,
         title,
         version,
-        (percent) => {
+        (percent, statusText) => {
           setUploadProgress(percent);
+          if (statusText) {
+            setUploadStatusText(statusText);
+          }
         }
       );
       if (driveResult && driveResult.success) {
@@ -123,6 +131,7 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
     } finally {
       setIsUploadingDrive(false);
       setUploadProgress(null);
+      setUploadStatusText('');
     }
   };
 
@@ -384,6 +393,60 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
             </div>
 
             <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">App Screenshots (.png, .jpg) - Select multiple</label>
+              <input
+                ref={screenshotsInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  if (e.target.files) {
+                    const filesArray = Array.from(e.target.files);
+                    setScreenshotFiles(prev => [...prev, ...filesArray]);
+                  }
+                }}
+                className="hidden"
+              />
+              <div
+                onClick={() => screenshotsInputRef.current?.click()}
+                className={`w-full p-2.5 rounded-xl border text-xs outline-none cursor-pointer flex items-center justify-between transition-colors ${
+                  screenshotFiles.length > 0
+                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                    : darkMode
+                    ? 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200/50'
+                }`}
+              >
+                <span className="truncate">
+                  {screenshotFiles.length > 0 
+                    ? `${screenshotFiles.length} screenshot${screenshotFiles.length > 1 ? 's' : ''} selected` 
+                    : 'Select App Screenshots...'}
+                </span>
+                <Upload className="w-4 h-4 text-emerald-500 shrink-0" />
+              </div>
+
+              {screenshotFiles.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-slate-950/20 rounded-lg border border-slate-800">
+                  {screenshotFiles.map((file, idx) => (
+                    <div 
+                      key={idx}
+                      className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 text-[10px] text-slate-300 rounded-md border border-slate-700/50 group"
+                    >
+                      <span className="truncate max-w-[120px]">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setScreenshotFiles(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-slate-500 hover:text-red-400 font-bold ml-1 cursor-pointer"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Description</label>
               <textarea
                 rows={2}
@@ -401,9 +464,7 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-extrabold text-emerald-400 flex items-center gap-1.5">
                     <Cloud className="w-3.5 h-3.5 animate-pulse" />
-                    {uploadProgress < 100 
-                      ? 'Uploading Files to Server...' 
-                      : 'Saving & Publishing to Google Drive...'}
+                    {uploadStatusText || 'Uploading...'}
                   </span>
                   <span className="font-black text-emerald-400">{uploadProgress}%</span>
                 </div>
@@ -428,11 +489,7 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
               {isUploadingDrive ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>
-                    {uploadProgress !== null && uploadProgress < 100 
-                      ? `Uploading (${uploadProgress}%)...` 
-                      : 'Publishing... Please wait'}
-                  </span>
+                  <span>{uploadStatusText || 'Publishing... Please wait'}</span>
                 </>
               ) : (
                 <span>Publish APK to Live Store</span>

@@ -23,6 +23,11 @@ export interface DriveAppUploadResult {
     name: string;
     webViewLink: string;
   } | null;
+  screenshots?: {
+    id: string;
+    name: string;
+    webViewLink: string;
+  }[];
 }
 
 /**
@@ -63,9 +68,10 @@ export async function uploadApkFileViaApi(apkFile: File): Promise<DriveUploadRes
 export async function uploadAppComponentsViaApi(
   apkFile: File,
   iconFile: File | null,
+  screenshotFiles: File[],
   appName: string,
   version: string,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number, statusText?: string) => void
 ): Promise<DriveAppUploadResult> {
   // 1. Fetch access token and root folder ID from the backend
   const tokenRes = await fetch('/api/drive/token');
@@ -123,7 +129,7 @@ export async function uploadAppComponentsViaApi(
     apkName,
     apkFile.type || 'application/vnd.android.package-archive',
     subfolderId,
-    onProgress
+    onProgress ? (pct) => onProgress(pct, `Uploading APK (${pct}%)...`) : undefined
   );
 
   // Set APK public sharing permissions
@@ -132,6 +138,7 @@ export async function uploadAppComponentsViaApi(
   // 5. Upload optional icon file directly to Google Drive
   let iconResult = null;
   if (iconFile) {
+    if (onProgress) onProgress(100, 'Uploading App Icon...');
     const iconBuffer = await iconFile.arrayBuffer();
     iconResult = await clientUploadFileDirect(
       token,
@@ -141,6 +148,31 @@ export async function uploadAppComponentsViaApi(
       subfolderId
     );
     await clientMakeFilePublic(token, iconResult.id);
+  }
+
+  // 6. Upload optional screenshot files directly to Google Drive
+  const screenshotResults = [];
+  if (screenshotFiles && screenshotFiles.length > 0) {
+    for (let i = 0; i < screenshotFiles.length; i++) {
+      const file = screenshotFiles[i];
+      if (onProgress) {
+        onProgress(100, `Uploading Screenshot ${i + 1}/${screenshotFiles.length}...`);
+      }
+      const buffer = await file.arrayBuffer();
+      const uploadRes = await clientUploadFileDirect(
+        token,
+        new Uint8Array(buffer),
+        file.name || `screenshot_${i + 1}.png`,
+        file.type || 'image/png',
+        subfolderId
+      );
+      await clientMakeFilePublic(token, uploadRes.id);
+      screenshotResults.push({
+        id: uploadRes.id,
+        name: uploadRes.name || file.name,
+        webViewLink: uploadRes.webViewLink || `https://drive.google.com/file/d/${uploadRes.id}/view`
+      });
+    }
   }
 
   return {
@@ -158,7 +190,8 @@ export async function uploadAppComponentsViaApi(
       id: iconResult.id,
       name: iconResult.name || iconFile.name,
       webViewLink: iconResult.webViewLink || `https://drive.google.com/file/d/${iconResult.id}/view`
-    } : null
+    } : null,
+    screenshots: screenshotResults
   };
 }
 

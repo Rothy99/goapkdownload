@@ -226,13 +226,20 @@ export default function App() {
           let screenshots = [iconUrl];
 
           if (parentId && parentId !== rootFolderId) {
-            const folderImage = imageFiles.find((img: any) => 
+            const folderImages = imageFiles.filter((img: any) => 
               img.parents && img.parents.includes(parentId)
             );
 
-            if (folderImage) {
-              iconUrl = `/api/drive/file/${folderImage.id}`;
-              screenshots = [iconUrl];
+            if (folderImages.length > 0) {
+              // Try to find the icon file (filename has 'icon') or fallback to first image
+              const iconFile = folderImages.find((img: any) => 
+                img.name.toLowerCase().includes('icon')
+              ) || folderImages[0];
+
+              iconUrl = `/api/drive/file/${iconFile.id}`;
+              
+              // Screenshots are all images in this folder
+              screenshots = folderImages.map((img: any) => `/api/drive/file/${img.id}`);
             }
           } else {
             const baseName = mainFile.name.replace(/\.[^/.]+$/, '').toLowerCase().split(/[-_]/)[0];
