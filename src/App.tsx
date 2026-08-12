@@ -238,10 +238,23 @@ export default function App() {
             );
 
             if (folderImages.length > 0) {
-              // Try to find the icon file (filename has 'icon') or fallback to first image
+              const folderName = subfolder ? subfolder.name.toLowerCase() : '';
+              const apkBase = mainFile.name.replace(/\.[^/.]+$/, '').toLowerCase().split(/[-_]/)[0];
+
+              // Try to find the icon file by:
+              // 1. Filename has 'icon'
+              // 2. Filename matches APK base name (e.g. Kuaishou.png and Kuaishou.apk)
+              // 3. Filename matches Folder name (e.g. Kuaishou.png in Kuaishou folder)
+              // 4. Fallback to folderImages[0]
               const iconFile = folderImages.find((img: any) => 
                 img.name.toLowerCase().includes('icon')
-              ) || folderImages[0];
+              ) || folderImages.find((img: any) => {
+                const imgBase = img.name.replace(/\.[^/.]+$/, '').toLowerCase();
+                return imgBase === apkBase;
+              }) || folderImages.find((img: any) => {
+                const imgBase = img.name.replace(/\.[^/.]+$/, '').toLowerCase();
+                return folderName && imgBase === folderName;
+              }) || folderImages[0];
 
               iconUrl = `/api/drive/file/${iconFile.id}`;
               
