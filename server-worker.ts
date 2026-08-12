@@ -366,7 +366,7 @@ app.get('*', async (c) => {
     const res = await c.env.ASSETS.fetch(c.req.raw);
     if (res.status === 404) {
       // Return SPA fallback (index.html)
-      const indexReq = new Request(new URL('/', c.req.url), c.req.raw);
+      const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
       return await c.env.ASSETS.fetch(indexReq);
     }
     return res;
