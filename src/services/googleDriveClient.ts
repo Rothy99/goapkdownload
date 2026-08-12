@@ -180,17 +180,22 @@ export async function uploadAppComponentsViaApi(
         onProgress(100, `Uploading Screenshot ${i + 1}/${screenshotFiles.length}...`);
       }
       const buffer = await file.arrayBuffer();
+      // Auto-rename to screenshot_1.png, screenshot_2.png etc., preserving original extension
+      const ext = (file.name && file.name.includes('.'))
+        ? file.name.split('.').pop() || 'png'
+        : 'png';
+      const screenshotName = `screenshot_${i + 1}.${ext}`;
       const uploadRes = await clientUploadFileDirect(
         token,
         new Uint8Array(buffer),
-        file.name || `screenshot_${i + 1}.png`,
+        screenshotName,
         file.type || 'image/png',
         subfolderId
       );
       await clientMakeFilePublic(token, uploadRes.id);
       screenshotResults.push({
         id: uploadRes.id,
-        name: uploadRes.name || file.name,
+        name: uploadRes.name || screenshotName,
         webViewLink: uploadRes.webViewLink || `https://drive.google.com/file/d/${uploadRes.id}/view`
       });
     }
