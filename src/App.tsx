@@ -286,7 +286,7 @@ export default function App() {
             downloadsNumeric: 1,
             icon: iconUrl,
             banner: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80',
-            developer: 'Google Drive Upload',
+            developer: 'GoAPK',
             minAndroid: 'Android 8.0+',
             size: mainSize,
             updatedDate: updatedDate,
