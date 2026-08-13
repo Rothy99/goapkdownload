@@ -51,6 +51,13 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
       { p: 100, text: 'Download Complete! Saving file...', s: '0 KB/s' }
     ];
 
+    // Open ad direct link in a new tab when download starts
+    try {
+      window.open('https://www.effectivecpmnetwork.com/xn8iypyef6?key=7bea000676617fb01d7559651705c9f7', '_blank');
+    } catch (e) {
+      console.error('Ad popup blocked:', e);
+    }
+
     let currentStage = 0;
     const interval = setInterval(() => {
       if (currentStage < stages.length) {
@@ -181,6 +188,18 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
           <p className="text-[11px] leading-relaxed text-slate-400">
             Open the downloaded <code className="text-emerald-400 font-mono">.apk</code> file in your Downloads folder. If prompted, toggle "Allow from this source" in Android Settings.
           </p>
+        </div>
+
+        {/* Sponsor/Helper Link */}
+        <div className="text-center pt-2 border-t border-slate-700/10 dark:border-slate-700/30">
+          <a
+            href="https://www.effectivecpmnetwork.com/xn8iypyef6?key=7bea000676617fb01d7559651705c9f7"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-emerald-500 hover:text-emerald-400 underline font-semibold transition-colors"
+          >
+            Click here if your download does not start automatically
+          </a>
         </div>
 
       </div>
