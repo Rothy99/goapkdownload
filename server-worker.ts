@@ -375,6 +375,132 @@ app.get('/api/drive/download/:fileId', async (c) => {
   }
 });
 
+// Helper to generate dynamic sitemap XML
+function generateSitemapXml(baseUrl: string, responseData: any): string {
+  const allFiles = responseData.files || [];
+  const rootFolderId = responseData.rootFolderId;
+
+  const apkFiles = allFiles.filter((file: any) => 
+    file.mimeType === 'application/vnd.android.package-archive' ||
+    (file.name && file.name.toLowerCase().endsWith('.apk'))
+  );
+
+  const appGroups: { [key: string]: any[] } = {};
+
+  apkFiles.forEach((file: any) => {
+    const parentId = file.parents && file.parents[0];
+    let groupKey = parentId;
+
+    if (!parentId || parentId === rootFolderId) {
+      const cleanTitle = file.name
+        ? file.name
+            .replace(/\.[^/.]+$/, '')
+            .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
+            .replace(/[-_]/g, ' ')
+            .trim()
+            .toLowerCase()
+        : 'unknown';
+      groupKey = `root_${cleanTitle}`;
+    }
+
+    if (!appGroups[groupKey]) {
+      appGroups[groupKey] = [];
+    }
+    appGroups[groupKey].push(file);
+  });
+
+  const slugs = Object.keys(appGroups).map((groupKey) => {
+    const groupFiles = appGroups[groupKey];
+    groupFiles.sort((a, b) => {
+      const tA = a.createdTime ? new Date(a.createdTime).getTime() : 0;
+      const tB = b.createdTime ? new Date(b.createdTime).getTime() : 0;
+      return tB - tA;
+    });
+
+    const mainFile = groupFiles[0];
+    const cleanTitle = mainFile.name
+      ? mainFile.name
+          .replace(/\.[^/.]+$/, '')
+          .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
+          .replace(/[-_]/g, ' ')
+      : 'unknown';
+    
+    const titleSlug = cleanTitle
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    return titleSlug || groupKey || 'app';
+  });
+
+  const uniqueSlugs = Array.from(new Set(slugs));
+
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/</loc>\n`;
+  xml += `    <changefreq>daily</changefreq>\n`;
+  xml += `    <priority>1.0</priority>\n`;
+  xml += `  </url>\n`;
+
+  uniqueSlugs.forEach(slug => {
+    xml += `  <url>\n`;
+    xml += `    <loc>${baseUrl}/app/${slug}</loc>\n`;
+    xml += `    <changefreq>weekly</changefreq>\n`;
+    xml += `    <priority>0.8</priority>\n`;
+    xml += `  </url>\n`;
+  });
+
+  xml += '</urlset>';
+  return xml;
+}
+
+// Dynamic Sitemap endpoint
+app.get('/sitemap.xml', async (c) => {
+  let listData = cachedFilesResponse;
+  const now = Date.now();
+  if (!listData || now >= cacheExpiry) {
+    try {
+      const creds = getCredentials(c);
+      const token = await getAccessToken(creds);
+      let folderId = cachedFolderId;
+      if (!folderId) {
+        folderId = await getOrCreateDriveFolder(token);
+        cachedFolderId = folderId;
+      }
+      const folderQuery = `'${folderId}' in parents and trashed = false`;
+      const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
+      const items = initialList.files || [];
+      const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
+
+      const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
+      const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
+      const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
+      const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
+
+      listData = {
+        success: true,
+        rootFolderId: folderId,
+        subfolders,
+        files: filesList.files || [],
+      };
+      cachedFilesResponse = listData;
+      cacheExpiry = Date.now() + CACHE_DURATION_MS;
+    } catch (e) {
+      listData = { files: [] };
+    }
+  }
+
+  const host = c.req.header('host') || 'goapkdownload.rothyyorn99.workers.dev';
+  const proto = c.req.url.startsWith('https') ? 'https' : 'http';
+  const baseUrl = `${proto}://${host}`;
+
+  const xml = generateSitemapXml(baseUrl, listData);
+  c.header('Content-Type', 'application/xml');
+  c.header('Cache-Control', 'public, max-age=3600');
+  return c.text(xml);
+});
+
 // Serve static assets and handle React SPA routing fallback
 app.get('*', async (c) => {
   const path = c.req.path;
