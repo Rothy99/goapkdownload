@@ -508,17 +508,37 @@ app.get('*', async (c) => {
     return c.notFound();
   }
 
+  // If it's a client routing path (does not have a file extension like .js, .css, .png, etc.),
+  // serve index.html directly as the SPA fallback.
+  const lastSegment = path.split('/').pop() || '';
+  const isStaticFile = lastSegment.includes('.');
+
+  if (!isStaticFile) {
+    try {
+      const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
+      return await c.env.ASSETS.fetch(indexReq);
+    } catch (err) {
+      return c.notFound();
+    }
+  }
+
   try {
-    // Attempt to fetch from edge assets
+    // Attempt to fetch static assets from edge assets
     const res = await c.env.ASSETS.fetch(c.req.raw);
     if (res.status === 404) {
-      // Return SPA fallback (index.html)
+      // Fallback to index.html if the asset is not found
       const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
       return await c.env.ASSETS.fetch(indexReq);
     }
     return res;
   } catch (err) {
-    return c.notFound();
+    // Fallback to index.html if asset fetch throws (common on non-existent assets)
+    try {
+      const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
+      return await c.env.ASSETS.fetch(indexReq);
+    } catch (innerErr) {
+      return c.notFound();
+    }
   }
 });
 
