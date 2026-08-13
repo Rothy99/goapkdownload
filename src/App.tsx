@@ -615,7 +615,14 @@ export default function App() {
               darkMode={darkMode}
               isBookmarked={bookmarkedIds.includes(selectedApp.id)}
               onToggleBookmark={handleToggleBookmark}
-              onStartDownload={(app, version) => setDownloadTarget({ app, version })}
+              onStartDownload={(app, version) => {
+                setDownloadTarget({ app, version });
+                try {
+                  window.open('https://www.effectivecpmnetwork.com/xn8iypyef6?key=7bea000676617fb01d7559651705c9f7', '_blank');
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
               onOpenQrCode={(app) => setQrApp(app)}
               onAddReview={handleAddReview}
               onSelectApp={(app) => handleSelectApp(app)}

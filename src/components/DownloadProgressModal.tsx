@@ -50,14 +50,6 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
       { p: 95, text: 'Finalizing installer package bundle...', s: '15.2 MB/s' },
       { p: 100, text: 'Download Complete! Saving file...', s: '0 KB/s' }
     ];
-
-    // Open ad direct link in a new tab when download starts
-    try {
-      window.open('https://www.effectivecpmnetwork.com/xn8iypyef6?key=7bea000676617fb01d7559651705c9f7', '_blank');
-    } catch (e) {
-      console.error('Ad popup blocked:', e);
-    }
-
     let currentStage = 0;
     const interval = setInterval(() => {
       if (currentStage < stages.length) {
@@ -159,7 +151,14 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => triggerApkFileDownload(app, targetVer)}
+                onClick={() => {
+                  triggerApkFileDownload(app, targetVer);
+                  try {
+                    window.open('https://www.effectivecpmnetwork.com/xn8iypyef6?key=7bea000676617fb01d7559651705c9f7', '_blank');
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
                 className="flex-1 py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Download className="w-3.5 h-3.5" />
