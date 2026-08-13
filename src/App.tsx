@@ -600,20 +600,35 @@ export default function App() {
       {/* Main Page Layout */}
       <main className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 pt-2.5 sm:pt-5 pb-8">
         
-        {/* VIEW 1: FULL APP DETAILS PAGE */}
-        {selectedApp ? (
-          <AppDetailPage
-            app={selectedApp}
-            allApps={apps}
-            onBack={() => handleSelectApp(null)}
-            darkMode={darkMode}
-            isBookmarked={bookmarkedIds.includes(selectedApp.id)}
-            onToggleBookmark={handleToggleBookmark}
-            onStartDownload={(app, version) => setDownloadTarget({ app, version })}
-            onOpenQrCode={(app) => setQrApp(app)}
-            onAddReview={handleAddReview}
-            onSelectApp={(app) => handleSelectApp(app)}
-          />
+        {/* VIEW 1: FULL APP DETAILS PAGE OR LOADING STATE */}
+        {window.location.pathname.toLowerCase().includes('/app/') ||
+         window.location.pathname.toLowerCase().includes('/apk/') ||
+         window.location.pathname.toLowerCase().includes('/download/') ||
+         window.location.hash.toLowerCase().includes('/app/') ||
+         window.location.hash.toLowerCase().includes('/apk/') ||
+         window.location.hash.toLowerCase().includes('/download/') ? (
+          selectedApp ? (
+            <AppDetailPage
+              app={selectedApp}
+              allApps={apps}
+              onBack={() => handleSelectApp(null)}
+              darkMode={darkMode}
+              isBookmarked={bookmarkedIds.includes(selectedApp.id)}
+              onToggleBookmark={handleToggleBookmark}
+              onStartDownload={(app, version) => setDownloadTarget({ app, version })}
+              onOpenQrCode={(app) => setQrApp(app)}
+              onAddReview={handleAddReview}
+              onSelectApp={(app) => handleSelectApp(app)}
+            />
+          ) : (
+            /* DETAIL LOADING STATE */
+            <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+              <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 border-t-emerald-500 animate-spin" />
+              <p className={`text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                Loading application details...
+              </p>
+            </div>
+          )
         ) : (
           /* VIEW 2: HOME CATALOGUE VIEW */
           <>
