@@ -515,7 +515,7 @@ app.get('*', async (c) => {
 
   if (!isStaticFile) {
     try {
-      const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
+      const indexReq = new Request(new URL('/index.html', c.req.url));
       return await c.env.ASSETS.fetch(indexReq);
     } catch (err) {
       return c.notFound();
@@ -527,14 +527,14 @@ app.get('*', async (c) => {
     const res = await c.env.ASSETS.fetch(c.req.raw);
     if (res.status === 404) {
       // Fallback to index.html if the asset is not found
-      const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
+      const indexReq = new Request(new URL('/index.html', c.req.url));
       return await c.env.ASSETS.fetch(indexReq);
     }
     return res;
   } catch (err) {
     // Fallback to index.html if asset fetch throws (common on non-existent assets)
     try {
-      const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
+      const indexReq = new Request(new URL('/index.html', c.req.url));
       return await c.env.ASSETS.fetch(indexReq);
     } catch (innerErr) {
       return c.notFound();
