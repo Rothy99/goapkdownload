@@ -501,16 +501,6 @@ app.get('/sitemap.xml', async (c) => {
   return c.text(xml);
 });
 
-app.get('/debug', (c) => {
-  return c.json({
-    hasAssets: !!c.env.ASSETS,
-    envKeys: Object.keys(c.env || {}),
-    url: c.req.url,
-    method: c.req.method,
-    headers: Object.fromEntries(c.req.raw.headers.entries()),
-  });
-});
-
 // Serve static assets and handle React SPA routing fallback
 app.get('*', async (c) => {
   const path = c.req.path;
@@ -525,7 +515,7 @@ app.get('*', async (c) => {
 
   if (!isStaticFile) {
     try {
-      const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
+      const indexReq = new Request(new URL('/', c.req.url), c.req.raw);
       return await c.env.ASSETS.fetch(indexReq);
     } catch (err: any) {
       return c.text('Routing Fallback Error: ' + err.message + '\n' + err.stack, 500);
@@ -537,14 +527,14 @@ app.get('*', async (c) => {
     const res = await c.env.ASSETS.fetch(c.req.raw);
     if (res.status === 404) {
       // Fallback to index.html if the asset is not found
-      const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
+      const indexReq = new Request(new URL('/', c.req.url), c.req.raw);
       return await c.env.ASSETS.fetch(indexReq);
     }
     return res;
   } catch (err: any) {
     // Fallback to index.html if asset fetch throws (common on non-existent assets)
     try {
-      const indexReq = new Request(new URL('/index.html', c.req.url), c.req.raw);
+      const indexReq = new Request(new URL('/', c.req.url), c.req.raw);
       return await c.env.ASSETS.fetch(indexReq);
     } catch (innerErr: any) {
       return c.text('Asset Fetch Fallback Error: ' + innerErr.message + '\n' + innerErr.stack, 500);
