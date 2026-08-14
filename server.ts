@@ -399,7 +399,7 @@ api.get('/drive/token', async (c) => {
 let cachedFolderId: string | null = null;
 let cachedFilesResponse: any = null;
 let cacheExpiry = 0;
-const CACHE_DURATION_MS = 15000; // Cache lists for 15 seconds
+const CACHE_DURATION_MS = 30 * 60 * 1000; // Cache lists for 30 minutes
 
 /**
  * GET /api/drive/files
@@ -777,10 +777,25 @@ function generateSitemapXml(baseUrl: string, responseData: any): string {
 }
 
 // Dynamic Sitemap endpoint
+// Robots.txt explicit route to bypass Cloudflare AI Content Signals override
+app.get('/robots.txt', (c) => {
+  c.header('Content-Type', 'text/plain; charset=utf-8');
+  return c.text(`User-agent: *
+Allow: /
+
+Sitemap: https://goapk.store/sitemap.xml`);
+});
+
+// Dynamic Sitemap endpoint (with background revalidation to prevent timeouts)
 app.get('/sitemap.xml', async (c) => {
+  const host = c.req.header('host') || 'goapk.store';
+  const proto = c.req.url.startsWith('https') ? 'https' : 'http';
+  const baseUrl = `${proto}://${host}`;
+
   let listData = cachedFilesResponse;
   const now = Date.now();
-  if (!listData || now >= cacheExpiry) {
+
+  const revalidate = async () => {
     try {
       const token = await getAccessToken();
       let folderId = cachedFolderId;
@@ -798,27 +813,73 @@ app.get('/sitemap.xml', async (c) => {
       const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
       const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
 
-      listData = {
+      const newData = {
         success: true,
         rootFolderId: folderId,
         subfolders,
         files: filesList.files || [],
       };
-      cachedFilesResponse = listData;
+      cachedFilesResponse = newData;
       cacheExpiry = Date.now() + CACHE_DURATION_MS;
+      console.log('Sitemap cache successfully revalidated in background.');
     } catch (e) {
-      listData = { files: [] };
+      console.error('Failed to revalidate sitemap cache in background:', e);
     }
+  };
+
+  // If we have cached files data, serve it instantly and revalidate in background if expired
+  if (listData) {
+    if (now >= cacheExpiry) {
+      if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
+        c.executionCtx.waitUntil(revalidate());
+      } else {
+        revalidate();
+      }
+    }
+    const xml = generateSitemapXml(baseUrl, listData);
+    c.header('Content-Type', 'application/xml');
+    c.header('Cache-Control', 'public, max-age=3600');
+    return c.text(xml);
   }
 
-  const host = c.req.header('host') || 'goapkdownload.rothyyorn99.workers.dev';
-  const proto = c.req.url.startsWith('https') ? 'https' : 'http';
-  const baseUrl = `${proto}://${host}`;
+  // Cold start fallback - fetch synchronously once
+  try {
+    const token = await getAccessToken();
+    let folderId = cachedFolderId;
+    if (!folderId) {
+      folderId = await getOrCreateDriveFolder(token);
+      cachedFolderId = folderId;
+    }
+    const folderQuery = `'${folderId}' in parents and trashed = false`;
+    const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
+    const items = initialList.files || [];
+    const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
 
-  const xml = generateSitemapXml(baseUrl, listData);
-  c.header('Content-Type', 'application/xml');
-  c.header('Cache-Control', 'public, max-age=3600');
-  return c.text(xml);
+    const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
+    const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
+    const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
+    const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
+
+    listData = {
+      success: true,
+      rootFolderId: folderId,
+      subfolders,
+      files: filesList.files || [],
+    };
+    cachedFilesResponse = listData;
+    cacheExpiry = Date.now() + CACHE_DURATION_MS;
+
+    const xml = generateSitemapXml(baseUrl, listData);
+    c.header('Content-Type', 'application/xml');
+    c.header('Cache-Control', 'public, max-age=3600');
+    return c.text(xml);
+  } catch (err: any) {
+    console.error('Sitemap synchronous fetch fallback failed:', err);
+    // Serve fallback sitemap containing homepage only to prevent 500 error
+    const xml = generateSitemapXml(baseUrl, { files: [] });
+    c.header('Content-Type', 'application/xml');
+    return c.text(xml);
+  }
 });
 
 // Mount the api router
