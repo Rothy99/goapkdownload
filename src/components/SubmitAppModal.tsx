@@ -121,6 +121,31 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
         setIsSubmitted(true);
         // Refresh catalog in background
         onSubmitApp();
+
+        // PING IndexNow to immediately notify Bing & Yandex of the new app page URL
+        try {
+          const slug = driveResult.appName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+          fetch('/api/drive/indexnow', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ slug })
+          })
+            .then((res) => {
+              console.log(`IndexNow notification for ${slug}: ${res.status}`);
+            })
+            .catch((err) => {
+              console.error('Failed to send IndexNow notification:', err);
+            });
+        } catch (e) {
+          console.error('IndexNow trigger error:', e);
+        }
+
         setTimeout(() => {
           setIsSubmitted(false);
           onClose();

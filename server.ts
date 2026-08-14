@@ -18,6 +18,32 @@ import {
 
 dotenv.config();
 
+async function pingIndexNow(slug: string): Promise<number> {
+  const url = `https://goapk.store/app/${slug}`;
+  const indexNowUrl = 'https://api.indexnow.org/IndexNow';
+  const body = {
+    host: 'goapk.store',
+    key: '1d7559651705c9f77bea000676617fb0',
+    keyLocation: 'https://goapk.store/1d7559651705c9f77bea000676617fb0.txt',
+    urlList: [url]
+  };
+
+  try {
+    const res = await fetch(indexNowUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8'
+      },
+      body: JSON.stringify(body)
+    });
+    console.log(`IndexNow ping status for ${slug}: ${res.status}`);
+    return res.status;
+  } catch (e) {
+    console.error(`Failed to ping IndexNow for ${slug}:`, e);
+    return 500;
+  }
+}
+
 // Helper: categorize APKs by filename match
 function getCategoryFromFileName(fileName: string): string {
   const lower = fileName.toLowerCase();
@@ -281,10 +307,32 @@ function injectSeoTags(htmlText: string, path: string, listData: any): string {
     `<meta property="og:description" content="${seoDesc}" />`
   );
 
-  // Inject robots and canonical tags right before </head>
+  const schemaData = {
+    "@context": "https://schema.org",
+    "@type": "MobileApplication",
+    "name": appTitle,
+    "operatingSystem": "Android",
+    "applicationCategory": `${appItem.category}Application`,
+    "fileSize": appItem.size,
+    "softwareVersion": appItem.versions?.[0]?.versionName || "1.0.0",
+    "author": {
+      "@type": "Organization",
+      "name": appItem.developer || "GoAPK"
+    },
+    "downloadUrl": canonicalUrl,
+    "description": appItem.description,
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  };
+
+  // Inject robots, canonical, and structured JSON-LD schema right before </head>
   const injectTags = `
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="${canonicalUrl}" />
+    <script type="application/ld+json">${JSON.stringify(schemaData)}</script>
   </head>`;
   updatedHtml = updatedHtml.replace(/<\/head>/i, injectTags);
 
@@ -464,6 +512,24 @@ api.get('/drive/app/:name', async (c) => {
   }
 
   return c.json({ success: true, app: appItem });
+});
+
+/**
+ * POST /api/drive/indexnow
+ * Notify IndexNow engine of a newly added or updated app URL
+ */
+api.post('/drive/indexnow', async (c) => {
+  try {
+    const body = await c.req.json();
+    const slug = body.slug;
+    if (!slug) {
+      return c.json({ success: false, error: 'Missing slug' }, 400);
+    }
+    const status = await pingIndexNow(slug);
+    return c.json({ success: status === 200, status });
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
 });
 
 /**

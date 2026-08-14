@@ -79,11 +79,12 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({
   const pageTitleTemplate = `${app.title} APK Download ${formattedVersion} (Safe & Original) for Android`;
   const pageMetaDescriptionTemplate = `Download the latest ${app.title} ${formattedVersion} APK for Android free. 100% verified, malware-free alternative with direct links.`;
 
-  // Dynamically set page title and meta description
+  // Dynamically set page title, meta description, robots, canonical and JSON-LD schema
   useEffect(() => {
     const previousTitle = document.title;
     document.title = pageTitleTemplate;
 
+    // Meta Description
     let metaDesc = document.querySelector('meta[name="description"]');
     const previousDesc = metaDesc ? metaDesc.getAttribute('content') : '';
     if (!metaDesc) {
@@ -93,13 +94,66 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({
     }
     metaDesc.setAttribute('content', pageMetaDescriptionTemplate);
 
+    // Robots Tag
+    let metaRobots = document.querySelector('meta[name="robots"]');
+    if (!metaRobots) {
+      metaRobots = document.createElement('meta');
+      metaRobots.setAttribute('name', 'robots');
+      document.head.appendChild(metaRobots);
+    }
+    metaRobots.setAttribute('content', 'index, follow');
+
+    // Canonical Tag
+    let linkCanonical = document.querySelector('link[rel="canonical"]');
+    if (!linkCanonical) {
+      linkCanonical = document.createElement('link');
+      linkCanonical.setAttribute('rel', 'canonical');
+      document.head.appendChild(linkCanonical);
+    }
+    const canonicalUrl = `${window.location.origin}/app/${app.slug}`;
+    linkCanonical.setAttribute('href', canonicalUrl);
+
+    // JSON-LD Schema
+    const schemaId = 'seo-json-ld';
+    let scriptEl = document.getElementById(schemaId);
+    if (!scriptEl) {
+      scriptEl = document.createElement('script');
+      scriptEl.setAttribute('id', schemaId);
+      scriptEl.setAttribute('type', 'application/ld+json');
+      document.head.appendChild(scriptEl);
+    }
+    const schemaData = {
+      "@context": "https://schema.org",
+      "@type": "MobileApplication",
+      "name": app.title,
+      "operatingSystem": "Android",
+      "applicationCategory": `${app.category}Application`,
+      "fileSize": app.size,
+      "softwareVersion": formattedVersion,
+      "author": {
+        "@type": "Organization",
+        "name": app.developer || "GoAPK"
+      },
+      "downloadUrl": canonicalUrl,
+      "description": app.description,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    };
+    scriptEl.textContent = JSON.stringify(schemaData);
+
     return () => {
       document.title = previousTitle;
       if (metaDesc && previousDesc !== null) {
         metaDesc.setAttribute('content', previousDesc);
       }
+      if (scriptEl) {
+        scriptEl.remove();
+      }
     };
-  }, [app, pageTitleTemplate, pageMetaDescriptionTemplate]);
+  }, [app, pageTitleTemplate, pageMetaDescriptionTemplate, formattedVersion]);
 
   const handleReviewSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -365,16 +419,125 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({
               </div>
             )}
 
-            {/* Description */}
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider mb-3 text-slate-400">
-                Application Description
+            {/* Description & Overview */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Overview & Description
               </h3>
               <p className={`text-sm leading-relaxed whitespace-pre-line ${
                 darkMode ? 'text-slate-300' : 'text-slate-700'
               }`}>
                 {app.longDescription || app.description}
               </p>
+            </div>
+
+            {/* Key Features Section */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Key Features of {app.title}
+              </h3>
+              <ul className={`text-sm leading-relaxed space-y-2.5 p-5 rounded-2xl border ${
+                darkMode ? 'bg-slate-800/40 border-slate-700/60 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-500 font-bold">✓</span>
+                  <div>
+                    <strong className={darkMode ? 'text-slate-100' : 'text-slate-900'}>Secure High-Speed Access:</strong> Download files safely via our integrated Google Drive CDNs.
+                  </div>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-500 font-bold">✓</span>
+                  <div>
+                    <strong className={darkMode ? 'text-slate-100' : 'text-slate-900'}>Optimized File Bundle:</strong> Lightweight APK package optimized for compatibility with Android platforms.
+                  </div>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-500 font-bold">✓</span>
+                  <div>
+                    <strong className={darkMode ? 'text-slate-100' : 'text-slate-900'}>Original & Verified:</strong> Signature verified safe from tampering, injections, or malicious modifications.
+                  </div>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-500 font-bold">✓</span>
+                  <div>
+                    <strong className={darkMode ? 'text-slate-100' : 'text-slate-900'}>Fluid Experience:</strong> Seamless performance tailored specifically for category requirements ({app.category}).
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            {/* Installation Guide Section */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Step-by-Step Installation Guide
+              </h3>
+              <div className={`text-sm leading-relaxed p-5 rounded-2xl border space-y-3.5 ${
+                darkMode ? 'bg-slate-800/40 border-slate-700/60 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}>
+                <p className="text-xs text-slate-400">Follow these standard instructions to run {app.title} APK on your Android device:</p>
+                <div className="space-y-3">
+                  <div className="flex gap-3">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                    <div>
+                      <h4 className={`font-bold text-xs ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Download Package</h4>
+                      <p className="text-xs text-slate-400">Click the download button above to retrieve the secure installer package.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                    <div>
+                      <h4 className={`font-bold text-xs ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Enable Unknown Sources</h4>
+                      <p className="text-xs text-slate-400">Go to Settings &gt; Security and toggle "Allow installation from Unknown Sources" or authorize browser permissions if prompted.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 text-xs font-bold flex items-center justify-center shrink-0">3</span>
+                    <div>
+                      <h4 className={`font-bold text-xs ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Run Installer</h4>
+                      <p className="text-xs text-slate-400">Open your File Manager, head to the Downloads folder, click on the <code className="text-emerald-500 font-mono">.apk</code> file, and confirm setup by tapping Install.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* FAQ Section */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Frequently Asked Questions (FAQ)
+              </h3>
+              <div className="space-y-3">
+                <div className={`p-4 rounded-2xl border ${
+                  darkMode ? 'bg-slate-800/40 border-slate-700/60' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <h4 className={`font-bold text-xs mb-1.5 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    Q1: Is {app.title} APK safe to download from GoAPK?
+                  </h4>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    Yes. All files are checked against multiple antivirus scanners and matched with secure signatures before publishing.
+                  </p>
+                </div>
+                <div className={`p-4 rounded-2xl border ${
+                  darkMode ? 'bg-slate-800/40 border-slate-700/60' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <h4 className={`font-bold text-xs mb-1.5 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    Q2: How do I update {app.title} to a newer version?
+                  </h4>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    Simply visit this page again to download the latest release bundle. Installing the updated file will overwrite the existing version without deleting app data.
+                  </p>
+                </div>
+                <div className={`p-4 rounded-2xl border ${
+                  darkMode ? 'bg-slate-800/40 border-slate-700/60' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <h4 className={`font-bold text-xs mb-1.5 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    Q3: Does GoAPK host modified or clean versions?
+                  </h4>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    We prioritize serving clean, original packages direct from developer sources, backed by cryptographically matching signatures.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Technical Specifications Table */}
