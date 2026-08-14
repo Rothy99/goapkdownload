@@ -434,6 +434,22 @@ export default function App() {
           }
           window.scrollTo({ top: 0, behavior: 'smooth' });
           return;
+        } else {
+          // Attempt to fetch this specific app detail from the API endpoint
+          fetch(`/api/drive/app/${routeSlug}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.app) {
+                setApps(prev => {
+                  const alreadyExists = prev.some(a => a.id === data.app.id);
+                  if (alreadyExists) return prev;
+                  return [data.app, ...prev];
+                });
+                setSelectedApp(data.app);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            })
+            .catch(err => console.error("Error fetching single app details:", err));
         }
       }
 
