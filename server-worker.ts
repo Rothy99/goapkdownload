@@ -732,6 +732,10 @@ app.get('*', async (c) => {
   const lastSegment = path.split('/').pop() || '';
   const isStaticFile = lastSegment.includes('.');
 
+  if (!c.env.ASSETS) {
+    return c.text('Routing Fallback Error: ASSETS binding is missing. Please make sure binding = "ASSETS" is defined under the [assets] section in your wrangler.toml.', 500);
+  }
+
   if (!isStaticFile) {
     try {
       const indexReq = new Request(new URL('/index.html', c.req.url).toString());
