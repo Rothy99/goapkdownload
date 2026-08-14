@@ -59,6 +59,7 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
   const [progress, setProgress] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(10);
+  const adWindowRef = React.useRef<Window | null>(null);
 
   if (!app) return null;
 
@@ -71,6 +72,7 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
 
     // Open the centered ad popup window
     const adWindow = openCenteredAdPopup();
+    adWindowRef.current = adWindow;
 
     const interval = setInterval(() => {
       setSecondsRemaining((prev) => {
@@ -135,12 +137,20 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
             <span>SECURE DOWNLOADING MODULE</span>
           </div>
           <button
+            disabled={secondsRemaining > 5 && !isCompleted}
             onClick={onClose}
-            className={`p-1.5 rounded-xl border cursor-pointer ${
-              darkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-100'
+            className={`p-1.5 rounded-xl border transition-all ${
+              secondsRemaining > 5 && !isCompleted
+                ? 'opacity-40 cursor-not-allowed border-slate-800'
+                : `cursor-pointer ${darkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-100'}`
             }`}
+            title={secondsRemaining > 5 && !isCompleted ? `Close disabled for ${secondsRemaining - 5}s` : 'Close'}
           >
-            <X className="w-4 h-4" />
+            {secondsRemaining > 5 && !isCompleted ? (
+              <span className="text-[10px] px-1.5 font-bold font-mono text-slate-400">{secondsRemaining - 5}s</span>
+            ) : (
+              <X className="w-4 h-4" />
+            )}
           </button>
         </div>
 
@@ -180,6 +190,50 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
             <span>Security: <strong className="text-emerald-400 font-semibold">Verified Safe</strong></span>
           </div>
         </div>
+
+        {/* Skip button visible after 5s */}
+        {!isCompleted && (
+          <div className="flex justify-center pt-1">
+            <button
+              disabled={secondsRemaining > 5}
+              onClick={() => {
+                try {
+                  if (adWindowRef.current && !adWindowRef.current.closed) {
+                    adWindowRef.current.close();
+                  }
+                } catch (e) {}
+                
+                triggerApkFileDownload(app, targetVer);
+
+                try {
+                  confetti({
+                    particleCount: 80,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                  });
+                } catch (e) {}
+
+                setIsCompleted(true);
+                setProgress(100);
+                setSecondsRemaining(0);
+              }}
+              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
+                secondsRemaining > 5
+                  ? 'bg-slate-800/40 text-slate-500 cursor-not-allowed border border-slate-700/30'
+                  : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md cursor-pointer'
+              }`}
+            >
+              {secondsRemaining > 5 ? (
+                <span>Skip Ads & Download in {secondsRemaining - 5}s...</span>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Skip Ads & Download Now</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Completed State Actions */}
         {isCompleted && (
