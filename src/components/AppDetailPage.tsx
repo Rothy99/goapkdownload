@@ -132,9 +132,19 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({
       "softwareVersion": formattedVersion,
       "author": {
         "@type": "Organization",
-        "name": app.developer || "GoAPK"
+        "name": app.developer && app.developer !== 'GoAPK' ? app.developer : 'Android Developer'
       },
-      "downloadUrl": canonicalUrl,
+      "publisher": {
+        "@type": "Organization",
+        "name": "GoAPK",
+        "logo": {
+          "@type": "ImageObject",
+          "url": `${window.location.origin}/logo.png`
+        }
+      },
+      "downloadUrl": app.versions?.[0]?.downloadUrl 
+        ? `${window.location.origin}${app.versions[0].downloadUrl}`
+        : canonicalUrl,
       "description": app.description,
       "offers": {
         "@type": "Offer",

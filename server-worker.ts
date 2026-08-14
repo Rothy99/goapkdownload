@@ -333,9 +333,19 @@ function injectSeoTags(htmlText: string, path: string, listData: any): string {
     "softwareVersion": appItem.versions?.[0]?.versionName || "1.0.0",
     "author": {
       "@type": "Organization",
-      "name": appItem.developer || "GoAPK"
+      "name": appItem.developer && appItem.developer !== 'GoAPK' ? appItem.developer : 'Android Developer'
     },
-    "downloadUrl": canonicalUrl,
+    "publisher": {
+      "@type": "Organization",
+      "name": "GoAPK",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://goapk.store/logo.png"
+      }
+    },
+    "downloadUrl": appItem.versions?.[0]?.downloadUrl 
+      ? `https://goapk.store${appItem.versions[0].downloadUrl}`
+      : canonicalUrl,
     "description": appItem.description,
     "offers": {
       "@type": "Offer",
