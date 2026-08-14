@@ -235,6 +235,62 @@ function findAppDetailByName(responseData: any, nameOrSlug: string): any | null 
   ) || null;
 }
 
+// Helper to inject SEO meta tags for app details pages dynamically
+function injectSeoTags(htmlText: string, path: string, listData: any): string {
+  let routeSlug = '';
+  const pathname = path.toLowerCase();
+  
+  if (pathname.includes('/app/')) {
+    routeSlug = path.split('/app/')[1].split('/')[0];
+  } else if (pathname.includes('/apk/')) {
+    routeSlug = path.split('/apk/')[1].split('/')[0];
+  } else if (pathname.includes('/download/')) {
+    routeSlug = path.split('/download/')[1].split('/')[0];
+  }
+
+  if (!routeSlug || !listData) {
+    return htmlText;
+  }
+
+  const appItem = findAppDetailByName(listData, routeSlug);
+  if (!appItem) {
+    return htmlText;
+  }
+
+  const appTitle = appItem.title;
+  const seoTitle = `${appTitle} APK Download - Latest Version`;
+  const seoDesc = `Download ${appTitle} APK and learn about its latest version, features, compatibility, and installation.`;
+  const canonicalUrl = `https://goapk.store/app/${appItem.slug}`;
+
+  // Replace default title
+  let updatedHtml = htmlText.replace(/<title>.*?<\/title>/i, `<title>${seoTitle}</title>`);
+  
+  // Replace default description
+  updatedHtml = updatedHtml.replace(
+    /<meta\s+name="description"\s+content=".*?"\s*\/?>/i,
+    `<meta name="description" content="${seoDesc}" />`
+  );
+
+  // Update OG tags for social SEO
+  updatedHtml = updatedHtml.replace(
+    /<meta\s+property="og:title"\s+content=".*?"\s*\/?>/i,
+    `<meta property="og:title" content="${seoTitle}" />`
+  );
+  updatedHtml = updatedHtml.replace(
+    /<meta\s+property="og:description"\s+content=".*?"\s*\/?>/i,
+    `<meta property="og:description" content="${seoDesc}" />`
+  );
+
+  // Inject robots and canonical tags right before </head>
+  const injectTags = `
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="${canonicalUrl}" />
+  </head>`;
+  updatedHtml = updatedHtml.replace(/<\/head>/i, injectTags);
+
+  return updatedHtml;
+}
+
 const app = new Hono<{ Bindings: HttpBindings }>();
 const PORT = 3000;
 
@@ -727,12 +783,59 @@ async function startServer() {
     // Serve static files from dist
     app.use('*', serveStatic({ root: './dist' }));
 
-    // Fallback GET to serve index.html for React SPA router
     app.get('*', async (c) => {
       try {
         const indexPath = path.join(process.cwd(), 'dist', 'index.html');
-        const html = await fs.promises.readFile(indexPath, 'utf-8');
-        return c.html(html);
+        let htmlText = await fs.promises.readFile(indexPath, 'utf-8');
+
+        const pathParam = c.req.path;
+        let routeSlug = '';
+        const pathname = pathParam.toLowerCase();
+        
+        if (pathname.includes('/app/')) {
+          routeSlug = pathParam.split('/app/')[1].split('/')[0];
+        } else if (pathname.includes('/apk/')) {
+          routeSlug = pathParam.split('/apk/')[1].split('/')[0];
+        } else if (pathname.includes('/download/')) {
+          routeSlug = pathParam.split('/download/')[1].split('/')[0];
+        }
+
+        if (routeSlug) {
+          let listData = cachedFilesResponse;
+          if (!listData) {
+            try {
+              const token = await getAccessToken();
+              let folderId = cachedFolderId;
+              if (!folderId) {
+                folderId = await getOrCreateDriveFolder(token);
+                cachedFolderId = folderId;
+              }
+              const folderQuery = `'${folderId}' in parents and trashed = false`;
+              const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
+              const items = initialList.files || [];
+              const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
+
+              const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
+              const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
+              const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
+              const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
+
+              listData = {
+                success: true,
+                rootFolderId: folderId,
+                subfolders,
+                files: filesList.files || [],
+              };
+              cachedFilesResponse = listData;
+              cacheExpiry = Date.now() + CACHE_DURATION_MS;
+            } catch (e) {
+              console.error('Failed to pre-hydrate cache for local SEO handler:', e);
+            }
+          }
+          htmlText = injectSeoTags(htmlText, pathParam, listData);
+        }
+
+        return c.html(htmlText);
       } catch (err) {
         return c.text('Not Found', 404);
       }

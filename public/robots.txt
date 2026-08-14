@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://goapk.store/sitemap.xml
