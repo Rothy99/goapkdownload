@@ -23,6 +23,32 @@ interface DownloadProgressModalProps {
   onOpenInstallGuide: () => void;
 }
 
+const openCenteredAdPopup = () => {
+  const w = 850;
+  const h = 650;
+  const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
+  const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
+
+  const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+  const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+
+  const systemZoom = width / window.screen.width;
+  const left = (width - w) / 2 / systemZoom + dualScreenLeft;
+  const top = (height - h) / 2 / systemZoom + dualScreenTop;
+  
+  try {
+    const adWin = window.open(
+      'https://www.effectivecpmnetwork.com/xn8iypyef6?key=7bea000676617fb01d7559651705c9f7',
+      'SponsorAd',
+      `scrollbars=yes,width=${w / systemZoom},height=${h / systemZoom},top=${top},left=${left}`
+    );
+    return adWin;
+  } catch (e) {
+    console.error("Popup blocked:", e);
+    return null;
+  }
+};
+
 export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
   app,
   version,
@@ -31,9 +57,8 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
   onOpenInstallGuide
 }) => {
   const [progress, setProgress] = useState(0);
-  const [speed, setSpeed] = useState('18.4 MB/s');
   const [isCompleted, setIsCompleted] = useState(false);
-  const [statusText, setStatusText] = useState('Connecting to high-speed mirror...');
+  const [secondsRemaining, setSecondsRemaining] = useState(10);
 
   if (!app) return null;
 
@@ -42,43 +67,58 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
   useEffect(() => {
     setProgress(0);
     setIsCompleted(false);
+    setSecondsRemaining(10);
 
-    const stages = [
-      { p: 15, text: 'Resolving CDN route & checking MD5 hash...', s: '12.1 MB/s' },
-      { p: 40, text: 'Streaming APK file package...', s: '22.8 MB/s' },
-      { p: 75, text: 'Verifying Play Protect cryptographic signature...', s: '28.5 MB/s' },
-      { p: 95, text: 'Finalizing installer package bundle...', s: '15.2 MB/s' },
-      { p: 100, text: 'Download Complete! Saving file...', s: '0 KB/s' }
-    ];
-    let currentStage = 0;
+    // Open the centered ad popup window
+    const adWindow = openCenteredAdPopup();
+
     const interval = setInterval(() => {
-      if (currentStage < stages.length) {
-        const stage = stages[currentStage];
-        setProgress(stage.p);
-        setStatusText(stage.text);
-        setSpeed(stage.s);
-        currentStage++;
-      } else {
-        clearInterval(interval);
-        setIsCompleted(true);
-        
-        // Trigger browser file download
-        triggerApkFileDownload(app, targetVer);
+      setSecondsRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          
+          // Close the ad popup window automatically
+          try {
+            if (adWindow && !adWindow.closed) {
+              adWindow.close();
+            }
+          } catch (err) {
+            console.error("Error closing ad popup:", err);
+          }
 
-        // Confetti celebration
-        try {
-          confetti({
-            particleCount: 80,
-            spread: 70,
-            origin: { y: 0.6 }
-          });
-        } catch (e) {
-          console.error(e);
+          // Trigger browser file download
+          triggerApkFileDownload(app, targetVer);
+
+          // Confetti celebration
+          try {
+            confetti({
+              particleCount: 80,
+              spread: 70,
+              origin: { y: 0.6 }
+            });
+          } catch (e) {
+            console.error(e);
+          }
+
+          setIsCompleted(true);
+          setProgress(100);
+          return 0;
         }
-      }
-    }, 600);
 
-    return () => clearInterval(interval);
+        const nextSec = prev - 1;
+        setProgress(Math.round(((10 - nextSec) / 10) * 100));
+        return nextSec;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      try {
+        if (adWindow && !adWindow.closed) {
+          adWindow.close();
+        }
+      } catch (err) {}
+    };
   }, [app, version]);
 
   return (
@@ -92,7 +132,7 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
             <Zap className="w-4 h-4" />
-            <span>FAST APK DOWNLOADER</span>
+            <span>SECURE DOWNLOADING MODULE</span>
           </div>
           <button
             onClick={onClose}
@@ -120,7 +160,7 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs font-semibold">
             <span className={isCompleted ? 'text-emerald-400' : 'text-slate-300'}>
-              {statusText}
+              {isCompleted ? 'Sponsor Ad closed successfully!' : `Sponsor Ad closing in ${secondsRemaining}s...`}
             </span>
             <span className="font-mono text-emerald-400">{progress}%</span>
           </div>
@@ -136,7 +176,7 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-400">
-            <span>Speed: <strong className="text-slate-200 font-mono">{speed}</strong></span>
+            <span>Countdown: <strong className="text-slate-200 font-mono">{secondsRemaining}s</strong></span>
             <span>Security: <strong className="text-emerald-400 font-semibold">Verified Safe</strong></span>
           </div>
         </div>
