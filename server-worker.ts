@@ -360,6 +360,12 @@ function injectSeoTags(htmlText: string, path: string, listData: any): string {
     `<meta property="og:description" content="${seoDesc}" />`
   );
 
+  // Replace default H1 tag for SEO Crawlers
+  updatedHtml = updatedHtml.replace(
+    /<h1\s+id="seo-h1".*?>.*?<\/h1>/i,
+    `<h1 id="seo-h1" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;">${seoTitle}</h1>`
+  );
+
   const schemaData = {
     "@context": "https://schema.org",
     "@type": "MobileApplication",
