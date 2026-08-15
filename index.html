@@ -32,8 +32,8 @@
 
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Load heavy third-party ad script dynamically after initial layout paint
-      window.addEventListener('DOMContentLoaded', () => {
+      // Load heavy third-party ad script dynamically after the window load event to prevent inflating page load metrics
+      window.addEventListener('load', () => {
         setTimeout(() => {
           const script = document.createElement('script');
           script.async = true;
