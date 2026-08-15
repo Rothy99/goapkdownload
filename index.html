@@ -12,10 +12,11 @@
     <meta property="og:description" content="Looking for a safe alternative to APKPure, LiteAPKs, &amp; APKMirror? Download 100% secure, malware-free original Android apps &amp; modded games free." />
     <title>GoAPKDownload - Safe APK Downloader &amp; Original Mod Mirror</title>
 
-    <!-- Google Fonts -->
+    <!-- Google Fonts Preconnect -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet">
+    <!-- Non-blocking Google Fonts loading strategy -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
@@ -24,13 +25,24 @@
       <h1 id="seo-h1" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;">GoAPKDownload - Safe APK Downloader &amp; Original Mirror</h1>
     </div>
     
-    <!-- Native Banner Ad -->
+    <!-- Native Banner Ad Container -->
     <div style="max-width: 1200px; margin: 20px auto; padding: 0 16px; text-align: center;">
-      <script async="async" data-cfasync="false" src="https://pl30831647.effectivecpmnetwork.com/b75c6b478e856cd9af23df7823a685f2/invoke.js"></script>
       <div id="container-b75c6b478e856cd9af23df7823a685f2"></div>
     </div>
 
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Load heavy third-party ad script dynamically after initial layout paint
+      window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          const script = document.createElement('script');
+          script.async = true;
+          script.setAttribute('data-cfasync', 'false');
+          script.src = 'https://pl30831647.effectivecpmnetwork.com/b75c6b478e856cd9af23df7823a685f2/invoke.js';
+          document.body.appendChild(script);
+        }, 1000);
+      });
+    </script>
   </body>
 </html>
 
