@@ -567,6 +567,48 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({
               </div>
             </div>
 
+            {/* Older Versions Archive Section for SEO indexability */}
+            {app.versions.length > 1 && (
+              <div className="space-y-3 pt-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Download Older Versions of {app.title}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  If the latest release is not compatible with your device, you can roll back and download older, verified APK version files here:
+                </p>
+                <div className={`p-4 rounded-2xl border divide-y ${
+                  darkMode 
+                    ? 'bg-slate-800/40 border-slate-700/60 divide-slate-700/40' 
+                    : 'bg-slate-50 border-slate-200 divide-slate-200'
+                }`}>
+                  {app.versions.map((ver, idx) => (
+                    <div key={idx} className={`py-3 flex items-center justify-between gap-4 ${idx === 0 ? 'pt-0' : ''} ${idx === app.versions.length - 1 ? 'pb-0' : ''}`}>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold text-xs ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>v{ver.versionName}</span>
+                          {ver.isLatest && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-500 border border-emerald-500/30">
+                              LATEST
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Released {ver.releaseDate} • {ver.fileSize}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => onStartDownload(app, ver)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[10px] transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 
