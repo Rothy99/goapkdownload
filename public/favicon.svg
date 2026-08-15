@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <path d="M 75 22 H 125 V 32 H 75 Z" fill="#2a3342" stroke="#a855f7" stroke-width="6"/>
+  <rect x="32" y="30" width="136" height="146" rx="32" fill="#1e2634" stroke="#a855f7" stroke-width="6"/>
+  <path d="M 52 50 H 148 V 74 H 122 V 88 H 148 V 152 H 52 Z" fill="#374357"/>
+  <rect x="68" y="66" width="58" height="70" rx="12" fill="#1e2634"/>
+  <text x="97" y="110" fill="#00f5d4" font-size="31" font-weight="900" text-anchor="middle">APK</text>
+</svg>
