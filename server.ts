@@ -43,8 +43,25 @@ async function pingIndexNow(slug: string): Promise<number> {
     return 500;
   }
 }
+// Helper to extract credentials from Request context, headers, query, or environment context
+function getCredentials(c: any) {
+  const headerClientId = c.req.header('x-drive-client-id');
+  const headerClientSecret = c.req.header('x-drive-client-secret');
+  const headerRefreshToken = c.req.header('x-drive-refresh-token');
+  const headerFolderId = c.req.header('x-drive-folder-id');
 
-// Helper: categorize APKs by filename match
+  const queryClientId = c.req.query('clientId');
+  const queryClientSecret = c.req.query('clientSecret');
+  const queryRefreshToken = c.req.query('refreshToken');
+  const queryFolderId = c.req.query('folderId');
+
+  return {
+    clientId: headerClientId || queryClientId || c.env?.CLIENT_ID || c.env?.GOOGLE_CLIENT_ID || process.env.CLIENT_ID || '',
+    clientSecret: headerClientSecret || queryClientSecret || c.env?.CLIENT_SECRET || c.env?.GOOGLE_CLIENT_SECRET || process.env.CLIENT_SECRET || '',
+    refreshToken: headerRefreshToken || queryRefreshToken || c.env?.REFRESH_TOKEN || c.env?.GOOGLE_REFRESH_TOKEN || process.env.REFRESH_TOKEN || '',
+    folderId: headerFolderId || queryFolderId || c.env?.GOOGLE_DRIVE_FOLDER_ID || process.env.GOOGLE_DRIVE_FOLDER_ID || '',
+  };
+}
 function getCategoryFromFileName(fileName: string): string {
   const lower = fileName.toLowerCase();
   if (lower.includes('game') || lower.includes('minecraft') || lower.includes('gta') || lower.includes('pubg')) {
@@ -407,7 +424,8 @@ api.use('*', cors());
  */
 api.get('/drive/status', async (c) => {
   try {
-    const token = await getAccessToken();
+    const creds = getCredentials(c);
+    const token = await getAccessToken(creds);
     const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota', {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -439,8 +457,19 @@ api.get('/drive/status', async (c) => {
  */
 api.get('/drive/token', async (c) => {
   try {
-    const token = await getAccessToken();
-    const folderId = await getOrCreateDriveFolder(token);
+    const creds = getCredentials(c);
+    const token = await getAccessToken(creds);
+    
+    let folderId = creds.folderId;
+    if (!folderId) {
+      const cacheKey = getCacheKey(creds);
+      const cacheEntry = driveCacheMap.get(cacheKey);
+      if (cacheEntry && cacheEntry.rootFolderId) {
+        folderId = cacheEntry.rootFolderId;
+      } else {
+        folderId = await getOrCreateDriveFolder(token);
+      }
+    }
     return c.json({ token, folderId });
   } catch (error: any) {
     console.error('Error generating client upload token:', error);
@@ -448,62 +477,78 @@ api.get('/drive/token', async (c) => {
   }
 });
 
-// Simple in-memory cache to avoid repeated slow Google Drive API calls
-let cachedFolderId: string | null = null;
-let cachedFilesResponse: any = null;
-let cacheExpiry = 0;
+interface CacheEntry {
+  rootFolderId: string;
+  filesResponse: any;
+  cacheExpiry: number;
+}
+const driveCacheMap = new Map<string, CacheEntry>();
 const CACHE_DURATION_MS = 30 * 60 * 1000; // Cache lists for 30 minutes
+
+function getCacheKey(creds: { clientId: string; refreshToken: string }) {
+  if (!creds.clientId || !creds.refreshToken) {
+    return 'default';
+  }
+  return `${creds.clientId}_${creds.refreshToken}`;
+}
+
+async function resolveFilesList(creds: any): Promise<any> {
+  const cacheKey = getCacheKey(creds);
+  const cacheEntry = driveCacheMap.get(cacheKey);
+  const now = Date.now();
+  if (cacheEntry && now < cacheEntry.cacheExpiry) {
+    return cacheEntry.filesResponse;
+  }
+
+  const token = await getAccessToken(creds);
+  let folderId = creds.folderId;
+  if (!folderId) {
+    if (cacheEntry && cacheEntry.rootFolderId) {
+      folderId = cacheEntry.rootFolderId;
+    } else {
+      folderId = await getOrCreateDriveFolder(token);
+    }
+  }
+
+  // 1. List items directly in the main folder to find subfolders
+  const folderQuery = `'${folderId}' in parents and trashed = false`;
+  const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
+  
+  const items = initialList.files || [];
+  const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
+
+  // 2. Fetch files from root folder and all subfolders
+  const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
+  const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
+  const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
+
+  const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
+
+  const responseData = {
+    success: true,
+    rootFolderId: folderId,
+    subfolders: subfolders,
+    files: filesList.files || [],
+  };
+
+  driveCacheMap.set(cacheKey, {
+    rootFolderId: folderId,
+    filesResponse: responseData,
+    cacheExpiry: now + CACHE_DURATION_MS,
+  });
+
+  return responseData;
+}
 
 /**
  * GET /api/drive/files
  * List all APK files uploaded to the GoAPKDownload Google Drive folder
  */
 api.get('/drive/files', async (c) => {
+  const creds = getCredentials(c);
   try {
-    await getAccessToken();
-  } catch (e) {
-    return c.json({ error: 'Google Drive is not configured.' }, 400);
-  }
-
-  const now = Date.now();
-  if (cachedFilesResponse && now < cacheExpiry) {
-    return c.json(cachedFilesResponse);
-  }
-
-  try {
-    const token = await getAccessToken();
-    let folderId = cachedFolderId;
-    if (!folderId) {
-      folderId = await getOrCreateDriveFolder(token);
-      cachedFolderId = folderId;
-    }
-    
-    // 1. List items directly in the main folder to find subfolders
-    const folderQuery = `'${folderId}' in parents and trashed = false`;
-    const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
-    
-    const items = initialList.files || [];
-    const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
-
-    // 2. Fetch files from root folder and all subfolders
-    const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
-    const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
-    const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
-
-    const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
-
-    const responseData = {
-      success: true,
-      rootFolderId: folderId,
-      subfolders: subfolders,
-      files: filesList.files || [],
-    };
-
-    // Cache the response
-    cachedFilesResponse = responseData;
-    cacheExpiry = Date.now() + CACHE_DURATION_MS;
-
-    return c.json(responseData);
+    const listData = await resolveFilesList(creds);
+    return c.json(listData);
   } catch (error: any) {
     console.error('Failed to list Google Drive files:', error);
     return c.json({ error: error.message || 'Error fetching files from Google Drive' }, 500);
@@ -520,51 +565,17 @@ api.get('/drive/app/:name', async (c) => {
     return c.json({ error: 'Missing app name or slug' }, 400);
   }
 
+  const creds = getCredentials(c);
   try {
-    await getAccessToken();
-  } catch (e) {
-    return c.json({ error: 'Google Drive is not configured.' }, 400);
-  }
-
-  let listData = cachedFilesResponse;
-  const now = Date.now();
-  if (!listData || now >= cacheExpiry) {
-    try {
-      const token = await getAccessToken();
-      let folderId = cachedFolderId;
-      if (!folderId) {
-        folderId = await getOrCreateDriveFolder(token);
-        cachedFolderId = folderId;
-      }
-      const folderQuery = `'${folderId}' in parents and trashed = false`;
-      const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
-      const items = initialList.files || [];
-      const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
-
-      const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
-      const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
-      const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
-      const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
-
-      listData = {
-        success: true,
-        rootFolderId: folderId,
-        subfolders,
-        files: filesList.files || [],
-      };
-      cachedFilesResponse = listData;
-      cacheExpiry = Date.now() + CACHE_DURATION_MS;
-    } catch (e: any) {
-      return c.json({ error: 'Failed to fetch files from Google Drive: ' + e.message }, 500);
+    const listData = await resolveFilesList(creds);
+    const appItem = findAppDetailByName(listData, nameParam);
+    if (!appItem) {
+      return c.json({ error: `App with name or slug '${nameParam}' not found.` }, 404);
     }
+    return c.json({ success: true, app: appItem });
+  } catch (e: any) {
+    return c.json({ error: 'Failed to fetch files from Google Drive: ' + e.message }, 500);
   }
-
-  const appItem = findAppDetailByName(listData, nameParam);
-  if (!appItem) {
-    return c.json({ error: `App with name or slug '${nameParam}' not found.` }, 404);
-  }
-
-  return c.json({ success: true, app: appItem });
 });
 
 /**
@@ -602,14 +613,18 @@ api.post('/drive/upload', async (c) => {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
 
+    const creds = getCredentials(c);
     const result = await uploadApkToDrive(
       buffer,
       fileName,
-      file.type || 'application/vnd.android.package-archive'
+      file.type || 'application/vnd.android.package-archive',
+      undefined,
+      creds
     );
 
     // Invalidate the cache on successful upload so the new file displays immediately
-    cacheExpiry = 0;
+    const cacheKey = getCacheKey(creds);
+    driveCacheMap.delete(cacheKey);
 
     return c.json({
       success: true,
@@ -633,8 +648,9 @@ api.post('/drive/upload', async (c) => {
  * Upload an APK and an optional icon image to a dedicated app folder in Google Drive
  */
 api.post('/drive/upload-app', async (c) => {
+  const creds = getCredentials(c);
   try {
-    await getAccessToken();
+    await getAccessToken(creds);
   } catch (e) {
     return c.json({ error: 'Google Drive is not configured.' }, 400);
   }
@@ -667,9 +683,18 @@ api.post('/drive/upload-app', async (c) => {
       appName = 'Unknown App';
     }
 
-    const token = await getAccessToken();
+    const token = await getAccessToken(creds);
     // 1. Get root folder ID
-    const rootFolderId = await getOrCreateDriveFolder(token);
+    let rootFolderId = creds.folderId;
+    if (!rootFolderId) {
+      const cacheKey = getCacheKey(creds);
+      const cacheEntry = driveCacheMap.get(cacheKey);
+      if (cacheEntry && cacheEntry.rootFolderId) {
+        rootFolderId = cacheEntry.rootFolderId;
+      } else {
+        rootFolderId = await getOrCreateDriveFolder(token);
+      }
+    }
 
     // 2. Create the app subfolder in Google Drive under root folder
     // Check if the subfolder already exists to avoid duplicates
@@ -701,7 +726,8 @@ api.post('/drive/upload-app', async (c) => {
       apkBuffer,
       apkName,
       apkFile.type || 'application/vnd.android.package-archive',
-      subfolderId
+      subfolderId,
+      creds
     );
 
     // 4. Upload optional icon file to the same subfolder
@@ -712,12 +738,14 @@ api.post('/drive/upload-app', async (c) => {
         iconBuffer,
         iconFile.name || 'icon.png',
         iconFile.type || 'image/png',
-        subfolderId
+        subfolderId,
+        creds
       );
     }
 
     // Invalidate the cache so the new app is immediately listed
-    cacheExpiry = 0;
+    const cacheKey = getCacheKey(creds);
+    driveCacheMap.delete(cacheKey);
 
     return c.json({
       success: true,
@@ -753,7 +781,8 @@ api.get('/drive/file/:fileId', async (c) => {
   }
 
   try {
-    const token = await getAccessToken();
+    const creds = getCredentials(c);
+    const token = await getAccessToken(creds);
     const metadata = await getDriveFileMetadata(token, fileId, 'name, mimeType');
     const response = await fetchDriveFileStream(token, fileId);
 
@@ -786,7 +815,8 @@ api.get('/drive/download/:fileId', async (c) => {
   }
 
   try {
-    const token = await getAccessToken();
+    const creds = getCredentials(c);
+    const token = await getAccessToken(creds);
     const metadata = await getDriveFileMetadata(token, fileId, 'name, mimeType');
     const response = await fetchDriveFileStream(token, fileId);
 
@@ -845,35 +875,15 @@ app.get('/sitemap.xml', async (c) => {
   const proto = c.req.url.startsWith('https') ? 'https' : 'http';
   const baseUrl = `${proto}://${host}`;
 
-  let listData = cachedFilesResponse;
+  const creds = getCredentials(c);
+  const cacheKey = getCacheKey(creds);
+  const cacheEntry = driveCacheMap.get(cacheKey);
+  let listData = cacheEntry?.filesResponse;
   const now = Date.now();
 
   const revalidate = async () => {
     try {
-      const token = await getAccessToken();
-      let folderId = cachedFolderId;
-      if (!folderId) {
-        folderId = await getOrCreateDriveFolder(token);
-        cachedFolderId = folderId;
-      }
-      const folderQuery = `'${folderId}' in parents and trashed = false`;
-      const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
-      const items = initialList.files || [];
-      const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
-
-      const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
-      const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
-      const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
-      const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
-
-      const newData = {
-        success: true,
-        rootFolderId: folderId,
-        subfolders,
-        files: filesList.files || [],
-      };
-      cachedFilesResponse = newData;
-      cacheExpiry = Date.now() + CACHE_DURATION_MS;
+      await resolveFilesList(creds);
       console.log('Sitemap cache successfully revalidated in background.');
     } catch (e) {
       console.error('Failed to revalidate sitemap cache in background:', e);
@@ -882,7 +892,7 @@ app.get('/sitemap.xml', async (c) => {
 
   // If we have cached files data, serve it instantly and revalidate in background if expired
   if (listData) {
-    if (now >= cacheExpiry) {
+    if (cacheEntry && now >= cacheEntry.cacheExpiry) {
       if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
         c.executionCtx.waitUntil(revalidate());
       } else {
@@ -897,31 +907,7 @@ app.get('/sitemap.xml', async (c) => {
 
   // Cold start fallback - fetch synchronously once
   try {
-    const token = await getAccessToken();
-    let folderId = cachedFolderId;
-    if (!folderId) {
-      folderId = await getOrCreateDriveFolder(token);
-      cachedFolderId = folderId;
-    }
-    const folderQuery = `'${folderId}' in parents and trashed = false`;
-    const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
-    const items = initialList.files || [];
-    const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
-
-    const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
-    const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
-    const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
-    const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
-
-    listData = {
-      success: true,
-      rootFolderId: folderId,
-      subfolders,
-      files: filesList.files || [],
-    };
-    cachedFilesResponse = listData;
-    cacheExpiry = Date.now() + CACHE_DURATION_MS;
-
+    listData = await resolveFilesList(creds);
     const xml = generateSitemapXml(baseUrl, listData);
     c.header('Content-Type', 'application/xml');
     c.header('Cache-Control', 'public, max-age=3600');
@@ -981,36 +967,12 @@ async function startServer() {
         }
 
         if (routeSlug) {
-          let listData = cachedFilesResponse;
-          if (!listData) {
-            try {
-              const token = await getAccessToken();
-              let folderId = cachedFolderId;
-              if (!folderId) {
-                folderId = await getOrCreateDriveFolder(token);
-                cachedFolderId = folderId;
-              }
-              const folderQuery = `'${folderId}' in parents and trashed = false`;
-              const initialList = await listDriveFiles(token, folderQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime)');
-              const items = initialList.files || [];
-              const subfolders = items.filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
-
-              const parentIds = [folderId, ...subfolders.map((sf: any) => sf.id)];
-              const parentQuery = parentIds.map(id => `'${id}' in parents`).join(' or ');
-              const filesQuery = `(${parentQuery}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false`;
-              const filesList = await listDriveFiles(token, filesQuery, 'files(id, name, mimeType, description, webViewLink, webContentLink, size, createdTime, parents)');
-
-              listData = {
-                success: true,
-                rootFolderId: folderId,
-                subfolders,
-                files: filesList.files || [],
-              };
-              cachedFilesResponse = listData;
-              cacheExpiry = Date.now() + CACHE_DURATION_MS;
-            } catch (e) {
-              console.error('Failed to pre-hydrate cache for local SEO handler:', e);
-            }
+          const creds = getCredentials(c);
+          let listData = null;
+          try {
+            listData = await resolveFilesList(creds);
+          } catch (e) {
+            console.error('Failed to pre-hydrate cache for local SEO handler:', e);
           }
           htmlText = injectSeoTags(htmlText, pathParam, listData);
         }
