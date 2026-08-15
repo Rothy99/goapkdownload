@@ -327,6 +327,14 @@ function findAppDetailByName(responseData: any, nameOrSlug: string): any | null 
 
 // Helper to inject SEO meta tags for app details pages dynamically
 function injectSeoTags(htmlText: string, path: string, listData: any): string {
+  let updatedHtml = htmlText;
+
+  // Inject the listData JSON into the HTML for instant frontend hydration
+  if (listData) {
+    const listDataScript = `<script id="gdrive-data" type="application/json">${JSON.stringify(listData).replace(/</g, '\\u003c')}</script>`;
+    updatedHtml = updatedHtml.replace(/<\/head>/i, `${listDataScript}\n</head>`);
+  }
+
   let routeSlug = '';
   const pathname = path.toLowerCase();
   
@@ -339,12 +347,12 @@ function injectSeoTags(htmlText: string, path: string, listData: any): string {
   }
 
   if (!routeSlug || !listData) {
-    return htmlText;
+    return updatedHtml;
   }
 
   const appItem = findAppDetailByName(listData, routeSlug);
   if (!appItem) {
-    return htmlText;
+    return updatedHtml;
   }
 
   const appTitle = appItem.title;
@@ -353,7 +361,7 @@ function injectSeoTags(htmlText: string, path: string, listData: any): string {
   const canonicalUrl = `https://goapk.store/app/${appItem.slug}`;
 
   // Replace default title
-  let updatedHtml = htmlText.replace(/<title>.*?<\/title>/i, `<title>${seoTitle}</title>`);
+  updatedHtml = updatedHtml.replace(/<title>.*?<\/title>/i, `<title>${seoTitle}</title>`);
   
   // Replace default description
   updatedHtml = updatedHtml.replace(
@@ -478,7 +486,7 @@ app.get('/api/drive/token', async (c) => {
   }
 });
 
-// Simple in-memory cache to avoid repeated slow Google Drive API calls
+// Simple in-memory cache and Cloudflare Cache API integration to avoid repeated slow Google Drive API calls
 interface CacheEntry {
   rootFolderId: string;
   filesResponse: any;
@@ -494,19 +502,101 @@ function getCacheKey(creds: { clientId: string; refreshToken: string }) {
   return `${creds.clientId}_${creds.refreshToken}`;
 }
 
-async function resolveFilesList(creds: any): Promise<any> {
+async function getCachedFiles(c: any, creds: any): Promise<any> {
   const cacheKey = getCacheKey(creds);
-  const cacheEntry = driveCacheMap.get(cacheKey);
   const now = Date.now();
+
+  // 1. Try Cloudflare Cache API first if available
+  if (typeof caches !== 'undefined') {
+    try {
+      const cache = (caches as any).default;
+      const cacheUrl = `https://cache.local/api/drive/files?key=${cacheKey}`;
+      const cachedRes = await cache.match(new Request(cacheUrl));
+      if (cachedRes) {
+        const data = await cachedRes.json();
+        return data;
+      }
+    } catch (e) {
+      console.error('Cloudflare cache match failed:', e);
+    }
+  }
+
+  // 2. Fallback to in-memory map
+  const cacheEntry = driveCacheMap.get(cacheKey);
   if (cacheEntry && now < cacheEntry.cacheExpiry) {
     return cacheEntry.filesResponse;
+  }
+
+  return null;
+}
+
+async function saveCachedFiles(c: any, creds: any, responseData: any) {
+  const cacheKey = getCacheKey(creds);
+  const now = Date.now();
+
+  // 1. Save in-memory
+  driveCacheMap.set(cacheKey, {
+    rootFolderId: responseData.rootFolderId,
+    filesResponse: responseData,
+    cacheExpiry: now + CACHE_DURATION_MS,
+  });
+
+  // 2. Save to Cloudflare Cache API if available
+  if (typeof caches !== 'undefined') {
+    try {
+      const cache = (caches as any).default;
+      const cacheUrl = `https://cache.local/api/drive/files?key=${cacheKey}`;
+      const cachedResponse = new Response(JSON.stringify(responseData), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': `public, max-age=${CACHE_DURATION_MS / 1000}`,
+        },
+      });
+      if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
+        c.executionCtx.waitUntil(cache.put(new Request(cacheUrl), cachedResponse));
+      } else {
+        await cache.put(new Request(cacheUrl), cachedResponse);
+      }
+    } catch (e) {
+      console.error('Cloudflare cache put failed:', e);
+    }
+  }
+}
+
+async function invalidateCache(c: any, creds: any) {
+  const cacheKey = getCacheKey(creds);
+  driveCacheMap.delete(cacheKey);
+
+  if (typeof caches !== 'undefined') {
+    try {
+      const cache = (caches as any).default;
+      const cacheUrl = `https://cache.local/api/drive/files?key=${cacheKey}`;
+      if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
+        c.executionCtx.waitUntil(cache.delete(new Request(cacheUrl)));
+      } else {
+        await cache.delete(new Request(cacheUrl));
+      }
+    } catch (e) {
+      console.error('Cloudflare cache delete failed:', e);
+    }
+  }
+}
+
+async function resolveFilesList(c: any, creds: any): Promise<any> {
+  const cacheKey = getCacheKey(creds);
+  
+  // Try reading from cache
+  const cachedData = await getCachedFiles(c, creds);
+  if (cachedData) {
+    return cachedData;
   }
 
   const token = await getAccessToken(creds);
   let folderId = creds.folderId;
   if (!folderId) {
-    if (cacheEntry && cacheEntry.rootFolderId) {
-      folderId = cacheEntry.rootFolderId;
+    const memoryEntry = driveCacheMap.get(cacheKey);
+    if (memoryEntry && memoryEntry.rootFolderId) {
+      folderId = memoryEntry.rootFolderId;
     } else {
       folderId = await getOrCreateDriveFolder(token);
     }
@@ -533,11 +623,8 @@ async function resolveFilesList(creds: any): Promise<any> {
     files: filesList.files || [],
   };
 
-  driveCacheMap.set(cacheKey, {
-    rootFolderId: folderId,
-    filesResponse: responseData,
-    cacheExpiry: now + CACHE_DURATION_MS,
-  });
+  // Save to cache
+  await saveCachedFiles(c, creds, responseData);
 
   return responseData;
 }
@@ -549,7 +636,7 @@ async function resolveFilesList(creds: any): Promise<any> {
 app.get('/api/drive/files', async (c) => {
   const creds = getCredentials(c);
   try {
-    const listData = await resolveFilesList(creds);
+    const listData = await resolveFilesList(c, creds);
     return c.json(listData);
   } catch (error: any) {
     console.error('Failed to list Google Drive files:', error);
@@ -569,7 +656,7 @@ app.get('/api/drive/app/:name', async (c) => {
 
   const creds = getCredentials(c);
   try {
-    const listData = await resolveFilesList(creds);
+    const listData = await resolveFilesList(c, creds);
     const appItem = findAppDetailByName(listData, nameParam);
     if (!appItem) {
       return c.json({ error: `App with name or slug '${nameParam}' not found.` }, 404);
@@ -625,8 +712,7 @@ app.post('/api/drive/upload', async (c) => {
     );
 
     // Invalidate the cache on successful upload so the new file displays immediately
-    const cacheKey = getCacheKey(creds);
-    driveCacheMap.delete(cacheKey);
+    await invalidateCache(c, creds);
 
     return c.json({
       success: true,
@@ -746,8 +832,7 @@ app.post('/api/drive/upload-app', async (c) => {
     }
 
     // Invalidate the cache so the new app is immediately listed
-    const cacheKey = getCacheKey(creds);
-    driveCacheMap.delete(cacheKey);
+    await invalidateCache(c, creds);
 
     return c.json({
       success: true,
@@ -885,7 +970,7 @@ app.get('/sitemap.xml', async (c) => {
 
   const revalidate = async () => {
     try {
-      await resolveFilesList(creds);
+      await resolveFilesList(c, creds);
       console.log('Sitemap cache successfully revalidated in background.');
     } catch (e) {
       console.error('Failed to revalidate sitemap cache in background:', e);
@@ -909,7 +994,7 @@ app.get('/sitemap.xml', async (c) => {
 
   // Cold start fallback - fetch synchronously once
   try {
-    listData = await resolveFilesList(creds);
+    listData = await resolveFilesList(c, creds);
     const xml = generateSitemapXml(baseUrl, listData);
     c.header('Content-Type', 'application/xml');
     c.header('Cache-Control', 'public, max-age=3600');
@@ -948,7 +1033,7 @@ app.get('*', async (c) => {
         const creds = getCredentials(c);
         let listData = null;
         try {
-          listData = await resolveFilesList(creds);
+          listData = await resolveFilesList(c, creds);
         } catch (e) {
           console.error('Failed to pre-hydrate cache for SEO fallback handler:', e);
         }

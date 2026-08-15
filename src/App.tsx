@@ -78,6 +78,224 @@ const setCookie = (name: string, value: string, days: number) => {
   }
 };
 
+export function mapRawFilesToAppItems(data: any): AppItem[] {
+  if (!data || !data.files) return [];
+  const allFiles = data.files;
+  const rootFolderId = data.rootFolderId;
+  const subfolders = data.subfolders || [];
+
+  // 1. Separate APKs/files and images
+  const apkFiles = allFiles.filter((file: any) => 
+    file.mimeType === 'application/vnd.android.package-archive' ||
+    (file.name && file.name.toLowerCase().endsWith('.apk'))
+  );
+
+  const imageFiles = allFiles.filter((file: any) => 
+    file.mimeType.startsWith('image/') ||
+    (file.name && /\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name))
+  );
+
+  // 2. Group APK files into AppItems by subfolder parents or clean titles
+  const appGroups: { [key: string]: any[] } = {};
+
+  apkFiles.forEach((file: any) => {
+    const parentId = file.parents && file.parents[0];
+    let groupKey = parentId;
+
+    if (!parentId || parentId === rootFolderId) {
+      const cleanTitle = file.name
+        ? file.name
+            .replace(/\.[^/.]+$/, '')
+            .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
+            .replace(/[-_+]/g, ' ')
+            .trim()
+            .toLowerCase()
+        : 'unknown';
+      groupKey = `root_${cleanTitle}`;
+    }
+
+    if (!groupKey) return;
+    if (!appGroups[groupKey]) {
+      appGroups[groupKey] = [];
+    }
+    appGroups[groupKey].push(file);
+  });
+
+  const mappedApps: AppItem[] = Object.keys(appGroups).map((groupKey) => {
+    const groupFiles = appGroups[groupKey];
+    
+    groupFiles.sort((a, b) => {
+      const timeA = a.createdTime ? new Date(a.createdTime).getTime() : 0;
+      const timeB = b.createdTime ? new Date(b.createdTime).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    const latestFile = groupFiles[0];
+    
+    let uiName = latestFile.name || 'Unknown App';
+    uiName = uiName
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
+      .replace(/[-_+]/g, ' ')
+      .trim();
+    const capitalizedTitle = uiName.charAt(0).toUpperCase() + uiName.slice(1);
+
+    let appCategory: AppCategory = 'Utilities';
+    let appDeveloper = 'GoAPK';
+    let appPackageName = `com.goapk.${uiName.toLowerCase().replace(/\s+/g, '')}`;
+    let appMinAndroid = 'Android 5.0+';
+    let appDescription = 'Fast, secure, and direct APK download hosted on Google Drive.';
+
+    if (groupKey && !groupKey.startsWith('root_')) {
+      const matchedFolder = subfolders.find((sf: any) => sf.id === groupKey);
+      if (matchedFolder && matchedFolder.description) {
+        const rawDesc = matchedFolder.description;
+        const lines = rawDesc.split('\n');
+        let parsedDescLines: string[] = [];
+
+        lines.forEach((line: string) => {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('category:')) {
+            const val = trimmed.substring(9).trim();
+            if (val) appCategory = val as AppCategory;
+          } else if (trimmed.startsWith('developer:')) {
+            const val = trimmed.substring(10).trim();
+            if (val) appDeveloper = val;
+          } else if (trimmed.startsWith('package:')) {
+            const val = trimmed.substring(8).trim();
+            if (val) appPackageName = val;
+          } else if (trimmed.startsWith('minAndroid:')) {
+            const val = trimmed.substring(11).trim();
+            if (val) appMinAndroid = val;
+          } else {
+            parsedDescLines.push(line);
+          }
+        });
+
+        appDescription = parsedDescLines.join('\n').trim();
+        if (!appDescription) {
+          appDescription = 'Fast, secure, and direct APK download hosted on Google Drive.';
+        }
+      }
+    }
+
+    let computedCategory: AppCategory = appCategory;
+    if (computedCategory === 'Utilities') {
+      const lower = uiName.toLowerCase();
+      if (lower.includes('game') || lower.includes('minecraft') || lower.includes('gta') || lower.includes('pubg')) {
+        computedCategory = 'Games';
+      } else if (lower.includes('music') || lower.includes('spotify') || lower.includes('video') || lower.includes('youtube') || lower.includes('netflix') || lower.includes('audio') || lower.includes('podcast')) {
+        computedCategory = 'Media & Video';
+      } else if (lower.includes('photo') || lower.includes('camera') || lower.includes('gallery') || lower.includes('editor')) {
+        computedCategory = 'Photography';
+      } else if (lower.includes('social') || lower.includes('facebook') || lower.includes('instagram') || lower.includes('whatsapp') || lower.includes('telegram') || lower.includes('chat') || lower.includes('message')) {
+        computedCategory = 'Social';
+      } else if (lower.includes('finance') || lower.includes('bank') || lower.includes('wallet') || lower.includes('pay') || lower.includes('crypto')) {
+        computedCategory = 'Finance';
+      } else if (lower.includes('health') || lower.includes('fit') || lower.includes('run') || lower.includes('workout') || lower.includes('diet')) {
+        computedCategory = 'Health & Fitness';
+      } else if (lower.includes('tool') || lower.includes('vpn') || lower.includes('cleaner') || lower.includes('browser') || lower.includes('file') || lower.includes('manager') || lower.includes('unzipper')) {
+        computedCategory = 'Tools';
+      } else if (lower.includes('office') || lower.includes('pdf') || lower.includes('word') || lower.includes('excel') || lower.includes('note') || lower.includes('calendar') || lower.includes('scan')) {
+        computedCategory = 'Productivity';
+      }
+    }
+
+    let screenshots: string[] = [];
+    let iconUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80';
+
+    if (groupKey && !groupKey.startsWith('root_')) {
+      const folderImages = imageFiles.filter((file: any) => file.parents && file.parents[0] === groupKey);
+      
+      if (folderImages.length > 0) {
+        let matchedIcon = folderImages.find((img: any) => 
+          img.name.toLowerCase().startsWith('icon') ||
+          img.name.toLowerCase().replace(/\.[^/.]+$/, '') === uiName.toLowerCase().replace(/\s+/g, '')
+        );
+
+        if (!matchedIcon && latestFile.name) {
+          const apkBase = latestFile.name.replace(/\.[^/.]+$/, '').toLowerCase();
+          matchedIcon = folderImages.find((img: any) => {
+            const imgName = img.name.toLowerCase().replace(/\.[^/.]+$/, '');
+            return apkBase.startsWith(imgName) || imgName.startsWith(apkBase);
+          });
+        }
+
+        if (!matchedIcon) {
+          matchedIcon = folderImages[0];
+        }
+
+        if (matchedIcon) {
+          iconUrl = `/api/drive/file/${matchedIcon.id}`;
+        }
+
+        const screenshotFiles = folderImages.filter((img: any) => img.id !== (matchedIcon ? matchedIcon.id : ''));
+        if (screenshotFiles.length > 0) {
+          screenshots = screenshotFiles.map((file: any) => `/api/drive/file/${file.id}`);
+        }
+      }
+    }
+
+    const versions = groupFiles.map((file: any, index: number) => {
+      const formattedSize = file.size 
+        ? (parseInt(file.size) / (1024 * 1024)).toFixed(1) + ' MB'
+        : 'Unknown';
+
+      const fileUpdatedDate = file.createdTime 
+        ? file.createdTime.split('T')[0] 
+        : new Date().toISOString().split('T')[0];
+
+      const versionMatch = file.name ? file.name.match(/[-_]v?(\d+\.\d+(?:\.\d+)*)/i) : null;
+      const extractedVersion = versionMatch ? versionMatch[1] : `1.0.${groupFiles.length - 1 - index}`;
+
+      return {
+        versionName: extractedVersion,
+        versionCode: groupFiles.length - index,
+        releaseDate: fileUpdatedDate,
+        fileSize: formattedSize,
+        minAndroid: appMinAndroid,
+        sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
+        changelog: [`Google Drive package update - version ${extractedVersion}`],
+        downloadUrl: `/api/drive/download/${file.id}`,
+        isLatest: index === 0
+      };
+    });
+
+    const mainSize = versions[0].fileSize;
+    const updatedDate = versions[0].releaseDate;
+
+    return {
+      id: groupKey,
+      title: capitalizedTitle,
+      packageName: appPackageName,
+      category: computedCategory,
+      rating: 5.0,
+      totalReviews: 1,
+      downloadsCount: 'New',
+      downloadsNumeric: 1,
+      icon: iconUrl,
+      banner: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80',
+      developer: appDeveloper,
+      minAndroid: appMinAndroid,
+      size: mainSize,
+      updatedDate: updatedDate,
+      isVerified: true,
+      tags: ['Google Drive', 'APK'],
+      description: appDescription,
+      longDescription: appDescription,
+      screenshots: screenshots,
+      safetyChecks: [
+        { label: 'Google Drive Virus Scan', status: 'passed', description: 'Scanned clean by Google Drive built-in virus scanner.' },
+        { label: 'Package Signature Verified', status: 'passed', description: 'Standard signature verification passed.' }
+      ],
+      versions: versions,
+      reviews: []
+    };
+  });
+
+  return mappedApps;
+}
+
 export default function App() {
   const [darkMode, setDarkMode] = useState(() => {
     return getCookie('dark_mode') === 'true';
@@ -102,9 +320,23 @@ export default function App() {
     setShowCookieBanner(false);
   };
   
-  // App catalogue state (loads from localStorage instantly on load)
+  // App catalogue state (loads from pre-hydrated script tag or localStorage instantly on load)
   const [apps, setApps] = useState<AppItem[]>(() => {
     try {
+      // 1. Try reading from pre-hydrated HTML script tag first
+      const scriptEl = document.getElementById('gdrive-data');
+      if (scriptEl) {
+        const hydratedData = JSON.parse(scriptEl.textContent || '{}');
+        if (hydratedData && hydratedData.files) {
+          const mapped = mapRawFilesToAppItems(hydratedData);
+          if (mapped.length > 0) {
+            localStorage.setItem('apk_store_cached_apps', JSON.stringify(mapped));
+            return mapped;
+          }
+        }
+      }
+
+      // 2. Fallback to localStorage cache
       const savedCustom = localStorage.getItem('apk_store_custom_apps');
       const custom = savedCustom ? JSON.parse(savedCustom) : [];
 
@@ -113,7 +345,7 @@ export default function App() {
 
       return [...custom, ...gdrive];
     } catch (e) {
-      console.error(e);
+      console.error('Failed to load initial apps state:', e);
     }
     return [];
   });
@@ -136,6 +368,10 @@ export default function App() {
   // Stale-While-Revalidate: Show skeleton grid only if we have no cached apps at all
   const [isLoadingGrid, setIsLoadingGrid] = useState(() => {
     try {
+      // Check if we have pre-hydrated script data
+      const scriptEl = document.getElementById('gdrive-data');
+      if (scriptEl) return false;
+
       const savedGdrive = localStorage.getItem('apk_store_cached_apps');
       if (savedGdrive && JSON.parse(savedGdrive).length > 0) {
         return false;
@@ -153,221 +389,7 @@ export default function App() {
       const res = await fetch('/api/drive/files');
       const data = await res.json();
       if (data.success && data.files) {
-        const allFiles = data.files;
-        const rootFolderId = data.rootFolderId;
-        const subfolders = data.subfolders || [];
-
-        // 1. Separate APKs/files and images
-        const apkFiles = allFiles.filter((file: any) => 
-          file.mimeType === 'application/vnd.android.package-archive' ||
-          (file.name && file.name.toLowerCase().endsWith('.apk'))
-        );
-
-        const imageFiles = allFiles.filter((file: any) => 
-          file.mimeType.startsWith('image/') ||
-          (file.name && /\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name))
-        );
-
-        // 2. Group APK files into AppItems by subfolder parents or clean titles
-        const appGroups: { [key: string]: any[] } = {};
-
-        apkFiles.forEach((file: any) => {
-          const parentId = file.parents && file.parents[0];
-          let groupKey = parentId;
-
-          // If it is in the root folder, group by the clean title name (case-insensitive)
-          if (!parentId || parentId === rootFolderId) {
-            const cleanTitle = file.name
-              ? file.name
-                  .replace(/\.[^/.]+$/, '')
-                  .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
-                  .replace(/[-_+]/g, ' ')
-                  .trim()
-                  .toLowerCase()
-              : 'unknown';
-            groupKey = `root_${cleanTitle}`;
-          }
-
-          if (!appGroups[groupKey]) {
-            appGroups[groupKey] = [];
-          }
-          appGroups[groupKey].push(file);
-        });
-
-        const mappedApps: AppItem[] = Object.keys(appGroups).map((groupKey) => {
-          const groupFiles = appGroups[groupKey];
-          
-          // Sort files inside group by createdTime descending (newest version first)
-          groupFiles.sort((a, b) => {
-            const tA = a.createdTime ? new Date(a.createdTime).getTime() : 0;
-            const tB = b.createdTime ? new Date(b.createdTime).getTime() : 0;
-            return tB - tA;
-          });
-
-          // Main app representation is the newest version
-          const mainFile = groupFiles[0];
-          
-          const cleanTitle = mainFile.name
-            ? mainFile.name
-                .replace(/\.[^/.]+$/, '') // strip extension
-                .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '') // strip version suffix
-                .replace(/[-_+]/g, ' ') // replace dash/underscore/plus with space
-            : 'Unknown App';
-          
-          const capitalizedTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1);
-          const updatedDate = mainFile.createdTime 
-            ? mainFile.createdTime.split('T')[0] 
-            : new Date().toISOString().split('T')[0];
-
-          let computedCategory = getCategoryFromFileName(mainFile.name || '');
-          let appDeveloper = 'GoAPK';
-          let appPackageName = `com.gdrive.app.${groupKey.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
-          let appMinAndroid = 'Android 8.0+';
-
-          // Find associated subfolder description
-          let appDescription = `Android package file (${mainFile.name}) hosted securely on Google Drive.`;
-          const parentId = mainFile.parents && mainFile.parents[0];
-          let iconUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=256&q=80';
-          let screenshots = [iconUrl];
-
-          if (parentId && parentId !== rootFolderId) {
-            const subfolder = subfolders.find((sf: any) => sf.id === parentId);
-            if (subfolder && subfolder.description) {
-              const descText = subfolder.description;
-              const lines = descText.split('\n');
-              let hasMeta = false;
-              let lineIdx = 0;
-              for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (line.startsWith('category:')) {
-                  computedCategory = line.substring('category:'.length).trim();
-                  hasMeta = true;
-                  lineIdx = i + 1;
-                } else if (line.startsWith('developer:')) {
-                  appDeveloper = line.substring('developer:'.length).trim();
-                  hasMeta = true;
-                  lineIdx = i + 1;
-                } else if (line.startsWith('package:')) {
-                  appPackageName = line.substring('package:'.length).trim();
-                  hasMeta = true;
-                  lineIdx = i + 1;
-                } else if (line.startsWith('minAndroid:')) {
-                  appMinAndroid = line.substring('minAndroid:'.length).trim();
-                  hasMeta = true;
-                  lineIdx = i + 1;
-                } else {
-                  break;
-                }
-              }
-              if (hasMeta) {
-                appDescription = lines.slice(lineIdx).join('\n');
-              } else {
-                appDescription = descText;
-              }
-            }
-
-            const folderImages = imageFiles.filter((img: any) => 
-              img.parents && img.parents.includes(parentId)
-            );
-
-            if (folderImages.length > 0) {
-              const folderName = subfolder ? subfolder.name.toLowerCase() : '';
-              const apkBase = mainFile.name.replace(/\.[^/.]+$/, '').toLowerCase().split(/[-_]/)[0];
-
-              // Try to find the icon file by:
-              // 1. Filename has 'icon'
-              // 2. Filename matches APK base name (e.g. Kuaishou.png and Kuaishou.apk)
-              // 3. Filename matches Folder name (e.g. Kuaishou.png in Kuaishou folder)
-              // 4. Fallback to folderImages[0]
-              const iconFile = folderImages.find((img: any) => 
-                img.name.toLowerCase().includes('icon')
-              ) || folderImages.find((img: any) => {
-                const imgBase = img.name.replace(/\.[^/.]+$/, '').toLowerCase();
-                return imgBase === apkBase;
-              }) || folderImages.find((img: any) => {
-                const imgBase = img.name.replace(/\.[^/.]+$/, '').toLowerCase();
-                return folderName && imgBase === folderName;
-              }) || folderImages[0];
-
-              iconUrl = `/api/drive/file/${iconFile.id}`;
-              
-              // Screenshots are all images in this folder except the icon itself
-              const nonIconImages = folderImages.filter((img: any) => img.id !== iconFile.id);
-              if (nonIconImages.length > 0) {
-                screenshots = nonIconImages.map((img: any) => `/api/drive/file/${img.id}`);
-              } else {
-                screenshots = [`/api/drive/file/${iconFile.id}`];
-              }
-            }
-          } else {
-            const baseName = mainFile.name.replace(/\.[^/.]+$/, '').toLowerCase().split(/[-_]/)[0];
-            const matchingImage = imageFiles.find((img: any) => {
-              const imgBaseName = img.name.replace(/\.[^/.]+$/, '').toLowerCase();
-              return imgBaseName.startsWith(baseName) || baseName.startsWith(imgBaseName);
-            });
-
-            if (matchingImage) {
-              iconUrl = `/api/drive/file/${matchingImage.id}`;
-              screenshots = [iconUrl];
-            }
-          }
-
-          // Map all files in the group to the versions array
-          const versions: ApkVersion[] = groupFiles.map((file: any, index: number) => {
-            const formattedSize = file.size 
-              ? (parseInt(file.size, 10) / (1024 * 1024)).toFixed(1) + ' MB'
-              : 'Unknown Size';
-
-            const fileUpdatedDate = file.createdTime 
-              ? file.createdTime.split('T')[0] 
-              : new Date().toISOString().split('T')[0];
-
-            const versionMatch = file.name ? file.name.match(/[-_]v?(\d+\.\d+(?:\.\d+)*)/i) : null;
-            const extractedVersion = versionMatch ? versionMatch[1] : `1.0.${groupFiles.length - 1 - index}`;
-
-            return {
-              versionName: extractedVersion,
-              versionCode: groupFiles.length - index,
-              releaseDate: fileUpdatedDate,
-              fileSize: formattedSize,
-              minAndroid: appMinAndroid,
-              sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
-              changelog: [`Google Drive package update - version ${extractedVersion}`],
-              downloadUrl: `/api/drive/download/${file.id}`,
-              isLatest: index === 0
-            };
-          });
-
-          const mainSize = versions[0].fileSize;
-
-          return {
-            id: groupKey,
-            title: capitalizedTitle,
-            packageName: appPackageName,
-            category: computedCategory,
-            rating: 5.0,
-            totalReviews: 1,
-            downloadsCount: 'New',
-            downloadsNumeric: 1,
-            icon: iconUrl,
-            banner: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80',
-            developer: appDeveloper,
-            minAndroid: appMinAndroid,
-            size: mainSize,
-            updatedDate: updatedDate,
-            isVerified: true,
-            tags: ['Google Drive', 'APK'],
-            description: appDescription,
-            longDescription: appDescription,
-            screenshots: screenshots,
-            safetyChecks: [
-              { label: 'Google Drive Virus Scan', status: 'passed', description: 'Scanned clean by Google Drive built-in virus scanner.' },
-              { label: 'Package Signature Verified', status: 'passed', description: 'Standard signature verification passed.' }
-            ],
-            versions: versions,
-            reviews: []
-          };
-        });
+        const mappedApps = mapRawFilesToAppItems(data);
 
         // Cache the mapped Google Drive apps in localStorage for the next instant load
         localStorage.setItem('apk_store_cached_apps', JSON.stringify(mappedApps));
