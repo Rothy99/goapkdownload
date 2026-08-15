@@ -181,7 +181,7 @@ export default function App() {
               ? file.name
                   .replace(/\.[^/.]+$/, '')
                   .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
-                  .replace(/[-_]/g, ' ')
+                  .replace(/[-_+]/g, ' ')
                   .trim()
                   .toLowerCase()
               : 'unknown';
@@ -211,7 +211,7 @@ export default function App() {
             ? mainFile.name
                 .replace(/\.[^/.]+$/, '') // strip extension
                 .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '') // strip version suffix
-                .replace(/[-_]/g, ' ') // replace dash/underscore with space
+                .replace(/[-_+]/g, ' ') // replace dash/underscore/plus with space
             : 'Unknown App';
           
           const capitalizedTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1);

@@ -74,7 +74,7 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
       const cleanName = file.name
         .replace(/\.[^/.]+$/, '')
         .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
-        .replace(/[-_]/g, ' ')
+        .replace(/[-_+]/g, ' ')
         .trim();
       const capitalized = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
       setTitle(capitalized);

@@ -117,7 +117,7 @@ function mapFilesToAppItems(responseData: any): any[] {
         ? file.name
             .replace(/\.[^/.]+$/, '')
             .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
-            .replace(/[-_]/g, ' ')
+            .replace(/[-_+]/g, ' ')
             .trim()
             .toLowerCase()
         : 'unknown';
@@ -143,7 +143,7 @@ function mapFilesToAppItems(responseData: any): any[] {
       ? mainFile.name
           .replace(/\.[^/.]+$/, '')
           .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '')
-          .replace(/[-_]/g, ' ')
+          .replace(/[-_+]/g, ' ')
       : 'Unknown App';
     
     const capitalizedTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1);
@@ -673,7 +673,7 @@ app.post('/api/drive/upload-app', async (c) => {
       appName = apkFile.name
         .replace(/\.[^/.]+$/, '') // strip extension
         .replace(/[-_]v?\d+\.\d+(\.\d+)*/gi, '') // strip version suffix
-        .replace(/[-_]/g, ' ') // replace dash/underscore with space
+        .replace(/[-_+]/g, ' ') // replace dash/underscore/plus with space
         .trim();
       
       appName = appName.charAt(0).toUpperCase() + appName.slice(1);
