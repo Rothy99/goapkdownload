@@ -109,6 +109,10 @@ export const SubmitAppModal: React.FC<SubmitAppModalProps> = ({
         title,
         version,
         description,
+        category,
+        developer,
+        packageName,
+        minAndroid,
         (percent, statusText) => {
           setUploadProgress(percent);
           if (statusText) {

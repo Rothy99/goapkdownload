@@ -151,8 +151,10 @@ function mapFilesToAppItems(responseData: any): any[] {
       ? mainFile.createdTime.split('T')[0] 
       : new Date().toISOString().split('T')[0];
 
-    const computedCategory = getCategoryFromFileName(mainFile.name || '');
-
+    let computedCategory = getCategoryFromFileName(mainFile.name || '');
+    let appDeveloper = 'GoAPK';
+    let appPackageName = `com.gdrive.app.${groupKey.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+    let appMinAndroid = 'Android 8.0+';
     let appDescription = `Android package file (${mainFile.name}) hosted securely on Google Drive.`;
     const parentId = mainFile.parents && mainFile.parents[0];
     let iconUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=256&q=80';
@@ -161,7 +163,42 @@ function mapFilesToAppItems(responseData: any): any[] {
     if (parentId && parentId !== rootFolderId) {
       const subfolder = subfolders.find((sf: any) => sf.id === parentId);
       if (subfolder && subfolder.description) {
-        appDescription = subfolder.description;
+        const descText = subfolder.description;
+        // Parse metadata lines if present
+        const lines = descText.split('\n');
+        
+        let hasMeta = false;
+        let lineIdx = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line.startsWith('category:')) {
+            computedCategory = line.substring('category:'.length).trim();
+            hasMeta = true;
+            lineIdx = i + 1;
+          } else if (line.startsWith('developer:')) {
+            appDeveloper = line.substring('developer:'.length).trim();
+            hasMeta = true;
+            lineIdx = i + 1;
+          } else if (line.startsWith('package:')) {
+            appPackageName = line.substring('package:'.length).trim();
+            hasMeta = true;
+            lineIdx = i + 1;
+          } else if (line.startsWith('minAndroid:')) {
+            appMinAndroid = line.substring('minAndroid:'.length).trim();
+            hasMeta = true;
+            lineIdx = i + 1;
+          } else {
+            // Stop parsing metadata at the first line that is not metadata
+            break;
+          }
+        }
+        
+        if (hasMeta) {
+          appDescription = lines.slice(lineIdx).join('\n');
+        } else {
+          appDescription = descText;
+        }
       }
 
       const folderImages = imageFiles.filter((img: any) => 
@@ -221,7 +258,7 @@ function mapFilesToAppItems(responseData: any): any[] {
         versionCode: groupFiles.length - index,
         releaseDate: fileUpdatedDate,
         fileSize: formattedSize,
-        minAndroid: 'Android 8.0+',
+        minAndroid: appMinAndroid,
         sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
         changelog: [`Google Drive package update - version ${extractedVersion}`],
         downloadUrl: `/api/drive/download/${file.id}`,
@@ -237,7 +274,7 @@ function mapFilesToAppItems(responseData: any): any[] {
     return {
       id: groupKey,
       title: capitalizedTitle,
-      packageName: `com.gdrive.app.${groupKey.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+      packageName: appPackageName,
       category: computedCategory,
       rating: 5.0,
       totalReviews: 1,
@@ -245,8 +282,8 @@ function mapFilesToAppItems(responseData: any): any[] {
       downloadsNumeric: 1,
       icon: iconUrl,
       banner: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80',
-      developer: 'GoAPK',
-      minAndroid: 'Android 8.0+',
+      developer: appDeveloper,
+      minAndroid: appMinAndroid,
       size: versions[0].fileSize,
       updatedDate: updatedDate,
       isVerified: true,

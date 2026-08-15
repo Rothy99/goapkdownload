@@ -72,6 +72,10 @@ export async function uploadAppComponentsViaApi(
   appName: string,
   version: string,
   description: string,
+  category: string,
+  developer: string,
+  packageName: string,
+  minAndroid: string,
   onProgress?: (percent: number, statusText?: string) => void
 ): Promise<DriveAppUploadResult> {
   // 1. Fetch access token and root folder ID from the backend
@@ -81,6 +85,13 @@ export async function uploadAppComponentsViaApi(
     throw new Error(err.error || `Failed to authenticate with upload token: ${tokenRes.status}`);
   }
   const { token, folderId: rootFolderId } = await tokenRes.json();
+
+  // Construct structured metadata header inside description
+  const folderDescription = `category:${category}
+developer:${developer || 'GoAPK'}
+package:${packageName}
+minAndroid:${minAndroid || 'Android 8.0+'}
+${description}`;
 
   // 2. Find or create the app subfolder directly from the client
   let subfolderId = '';
@@ -96,7 +107,7 @@ export async function uploadAppComponentsViaApi(
 
   if (searchData.files && searchData.files.length > 0) {
     subfolderId = searchData.files[0].id;
-    // Update existing folder description
+    // Update existing folder description with structured metadata
     await fetch(`https://www.googleapis.com/drive/v3/files/${subfolderId}`, {
       method: 'PATCH',
       headers: {
@@ -104,7 +115,7 @@ export async function uploadAppComponentsViaApi(
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        description: description
+        description: folderDescription
       })
     });
   } else {
@@ -119,7 +130,7 @@ export async function uploadAppComponentsViaApi(
         name: appName,
         mimeType: 'application/vnd.google-apps.folder',
         parents: [rootFolderId],
-        description: description
+        description: folderDescription
       })
     });
     if (!createRes.ok) throw new Error('Failed to create app folder in Google Drive');
