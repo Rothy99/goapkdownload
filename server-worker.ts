@@ -637,6 +637,37 @@ app.get('/api/drive/files', async (c) => {
   const creds = getCredentials(c);
   try {
     const listData = await resolveFilesList(c, creds);
+    
+    const pageParam = c.req.query('page');
+    const limitParam = c.req.query('limit');
+    
+    if (pageParam || limitParam) {
+      const page = Math.max(1, parseInt(pageParam || '1', 10));
+      const limit = Math.max(1, parseInt(limitParam || '24', 10));
+      
+      const files = listData.files || [];
+      const totalFiles = files.length;
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      
+      const paginatedFiles = files.slice(startIndex, endIndex);
+      
+      return c.json({
+        success: true,
+        rootFolderId: listData.rootFolderId,
+        subfolders: listData.subfolders || [],
+        files: paginatedFiles,
+        pagination: {
+          page,
+          limit,
+          totalItems: totalFiles,
+          totalPages: Math.ceil(totalFiles / limit),
+          hasNextPage: endIndex < totalFiles,
+          hasPrevPage: page > 1
+        }
+      });
+    }
+    
     return c.json(listData);
   } catch (error: any) {
     console.error('Failed to list Google Drive files:', error);

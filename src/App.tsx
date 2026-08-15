@@ -361,9 +361,17 @@ export default function App() {
     return INITIAL_REQUESTS;
   });
 
-  // Category and Tag filters
   const [selectedCategory, setSelectedCategory] = useState<AppCategory>('All');
   const [activeFilter, setActiveFilter] = useState<string>('all');
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
+
+  // Reset pagination to page 1 on filter or category changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory, activeFilter]);
   
   // Stale-While-Revalidate: Show skeleton grid only if we have no cached apps at all
   const [isLoadingGrid, setIsLoadingGrid] = useState(() => {
@@ -635,6 +643,14 @@ export default function App() {
     });
   }, [apps, selectedCategory, activeFilter]);
 
+  // Paginated Apps for current page
+  const paginatedApps = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredApps.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredApps, currentPage]);
+
+  const totalPages = Math.ceil(filteredApps.length / ITEMS_PER_PAGE);
+
   // Featured apps for Hero banner
   const featuredApps = useMemo(() => {
     return apps.filter(a => a.isFeatured);
@@ -768,19 +784,111 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 mb-12">
-                {filteredApps.map((app) => (
-                  <AppCard
-                    key={app.id}
-                    app={app}
-                    darkMode={darkMode}
-                    isBookmarked={bookmarkedIds.includes(app.id)}
-                    onSelectApp={(selected) => handleSelectApp(selected)}
-                    onQuickDownload={(target) => handleSelectApp(target)}
-                    onToggleBookmark={handleToggleBookmark}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+                  {paginatedApps.map((app) => (
+                    <AppCard
+                      key={app.id}
+                      app={app}
+                      darkMode={darkMode}
+                      isBookmarked={bookmarkedIds.includes(app.id)}
+                      onSelectApp={(selected) => handleSelectApp(selected)}
+                      onQuickDownload={(target) => handleSelectApp(target)}
+                      onToggleBookmark={handleToggleBookmark}
+                    />
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center space-x-2 mt-2 mb-12">
+                    {/* Prev Button */}
+                    <button
+                      onClick={() => {
+                        if (currentPage > 1) {
+                          setCurrentPage(prev => prev - 1);
+                          window.scrollTo({ top: 300, behavior: 'smooth' });
+                        }
+                      }}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all font-bold text-sm ${
+                        currentPage === 1
+                          ? 'opacity-40 cursor-not-allowed border border-transparent'
+                          : darkMode
+                            ? 'bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 cursor-pointer'
+                            : 'bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 cursor-pointer shadow-xs'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+
+                    {/* Page Numbers */}
+                    {(() => {
+                      const pages = [];
+                      const range = 1; // Number of pages to show around current page
+                      
+                      for (let i = 1; i <= totalPages; i++) {
+                        const isPageVisible = 
+                          i === 1 || 
+                          i === totalPages || 
+                          Math.abs(i - currentPage) <= range;
+
+                        if (isPageVisible) {
+                          pages.push(
+                            <button
+                              key={i}
+                              onClick={() => {
+                                setCurrentPage(i);
+                                window.scrollTo({ top: 300, behavior: 'smooth' });
+                              }}
+                              className={`w-10 h-10 rounded-xl font-black text-xs transition-all cursor-pointer ${
+                                currentPage === i
+                                  ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/10'
+                                  : darkMode
+                                    ? 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-slate-100 hover:bg-slate-800'
+                                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-xs'
+                              }`}
+                            >
+                              {i}
+                            </button>
+                          );
+                        } else if (i === 2 || i === totalPages - 1) {
+                          pages.push(
+                            <span key={`ellipse-${i}`} className={`px-2 text-xs font-bold tracking-widest ${darkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                              •••
+                            </span>
+                          );
+                        }
+                      }
+                      return pages;
+                    })()}
+
+                    {/* Next Button */}
+                    <button
+                      onClick={() => {
+                        if (currentPage < totalPages) {
+                          setCurrentPage(prev => prev + 1);
+                          window.scrollTo({ top: 300, behavior: 'smooth' });
+                        }
+                      }}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all font-bold text-sm ${
+                        currentPage === totalPages
+                          ? 'opacity-40 cursor-not-allowed border border-transparent'
+                          : darkMode
+                            ? 'bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 cursor-pointer'
+                            : 'bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 cursor-pointer shadow-xs'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
