@@ -219,7 +219,10 @@ export default function App() {
             ? mainFile.createdTime.split('T')[0] 
             : new Date().toISOString().split('T')[0];
 
-          const computedCategory = getCategoryFromFileName(mainFile.name || '');
+          let computedCategory = getCategoryFromFileName(mainFile.name || '');
+          let appDeveloper = 'GoAPK';
+          let appPackageName = `com.gdrive.app.${groupKey.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+          let appMinAndroid = 'Android 8.0+';
 
           // Find associated subfolder description
           let appDescription = `Android package file (${mainFile.name}) hosted securely on Google Drive.`;
@@ -230,7 +233,37 @@ export default function App() {
           if (parentId && parentId !== rootFolderId) {
             const subfolder = subfolders.find((sf: any) => sf.id === parentId);
             if (subfolder && subfolder.description) {
-              appDescription = subfolder.description;
+              const descText = subfolder.description;
+              const lines = descText.split('\n');
+              let hasMeta = false;
+              let lineIdx = 0;
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.startsWith('category:')) {
+                  computedCategory = line.substring('category:'.length).trim();
+                  hasMeta = true;
+                  lineIdx = i + 1;
+                } else if (line.startsWith('developer:')) {
+                  appDeveloper = line.substring('developer:'.length).trim();
+                  hasMeta = true;
+                  lineIdx = i + 1;
+                } else if (line.startsWith('package:')) {
+                  appPackageName = line.substring('package:'.length).trim();
+                  hasMeta = true;
+                  lineIdx = i + 1;
+                } else if (line.startsWith('minAndroid:')) {
+                  appMinAndroid = line.substring('minAndroid:'.length).trim();
+                  hasMeta = true;
+                  lineIdx = i + 1;
+                } else {
+                  break;
+                }
+              }
+              if (hasMeta) {
+                appDescription = lines.slice(lineIdx).join('\n');
+              } else {
+                appDescription = descText;
+              }
             }
 
             const folderImages = imageFiles.filter((img: any) => 
@@ -297,7 +330,7 @@ export default function App() {
               versionCode: groupFiles.length - index,
               releaseDate: fileUpdatedDate,
               fileSize: formattedSize,
-              minAndroid: 'Android 8.0+',
+              minAndroid: appMinAndroid,
               sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
               changelog: [`Google Drive package update - version ${extractedVersion}`],
               downloadUrl: `/api/drive/download/${file.id}`,
@@ -310,7 +343,7 @@ export default function App() {
           return {
             id: groupKey,
             title: capitalizedTitle,
-            packageName: `com.gdrive.app.${groupKey.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+            packageName: appPackageName,
             category: computedCategory,
             rating: 5.0,
             totalReviews: 1,
@@ -318,8 +351,8 @@ export default function App() {
             downloadsNumeric: 1,
             icon: iconUrl,
             banner: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80',
-            developer: 'GoAPK',
-            minAndroid: 'Android 8.0+',
+            developer: appDeveloper,
+            minAndroid: appMinAndroid,
             size: mainSize,
             updatedDate: updatedDate,
             isVerified: true,
