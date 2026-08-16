@@ -16,6 +16,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { AppItem, ApkVersion, AppReview } from '../types';
+import { AdBanner } from './AdBanner';
 
 interface AppDetailPageProps {
   app: AppItem;
@@ -440,6 +441,9 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({
                 {app.longDescription || app.description}
               </p>
             </div>
+
+            {/* Adsterra 300x250 Medium Rectangle Ad Banner */}
+            <AdBanner id="27061d8407c9705694bbb9827244f28b" width={300} height={250} />
 
             {/* Key Features Section */}
             <div className="space-y-3 pt-2">

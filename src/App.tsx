@@ -15,6 +15,7 @@ import { RequestAppModal } from './components/RequestAppModal';
 import { BookmarksModal } from './components/BookmarksModal';
 import { InstallGuideModal } from './components/InstallGuideModal';
 import { Footer } from './components/Footer';
+import { AdBanner } from './components/AdBanner';
 
 import { 
   AlertCircle
@@ -799,6 +800,9 @@ export default function App() {
                   ))}
                 </div>
 
+                {/* 300x250 Medium Rectangle Ad Banner */}
+                <AdBanner id="27061d8407c9705694bbb9827244f28b" width={300} height={250} className="mb-6" />
+
                 {/* Pagination Controls */}
                 {totalPages > 1 && (
                   <div className="flex items-center justify-center space-x-2 mt-2 mb-12">
@@ -894,6 +898,9 @@ export default function App() {
         )}
 
       </main>
+
+      {/* Global 728x90 Leaderboard Ad Banner (Hidden on Mobile) */}
+      <AdBanner id="6c0c0bf77214a4205676db5e58cc8dec" width={728} height={90} className="hidden md:flex mb-6" />
 
       {/* Footer */}
       <Footer

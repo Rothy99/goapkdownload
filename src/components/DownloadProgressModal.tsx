@@ -14,6 +14,7 @@ import {
 import confetti from 'canvas-confetti';
 import { AppItem, ApkVersion } from '../types';
 import { triggerApkFileDownload } from '../utils/helpers';
+import { AdBanner } from './AdBanner';
 
 interface DownloadProgressModalProps {
   app: AppItem | null;
@@ -190,6 +191,11 @@ export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
             <span>Security: <strong className="text-emerald-400 font-semibold">Verified Safe</strong></span>
           </div>
         </div>
+
+        {/* Adsterra 300x250 Medium Rectangle ad */}
+        {!isCompleted && (
+          <AdBanner id="27061d8407c9705694bbb9827244f28b" width={300} height={250} className="my-2" />
+        )}
 
         {/* Skip button visible after 5s */}
         {!isCompleted && (
