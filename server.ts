@@ -628,6 +628,20 @@ async function resolveFilesList(c: any, creds: any): Promise<any> {
 }
 
 /**
+ * GET /api/drive/cache/clear
+ * Manually invalidate and clear the Google Drive files cache
+ */
+api.get('/drive/cache/clear', async (c) => {
+  const creds = getCredentials(c);
+  try {
+    await invalidateCache(c, creds);
+    return c.json({ success: true, message: 'Cache cleared successfully!' });
+  } catch (e: any) {
+    return c.json({ success: false, error: e.message || 'Failed to invalidate cache' }, 500);
+  }
+});
+
+/**
  * GET /api/drive/files
  * List all APK files uploaded to the GoAPKDownload Google Drive folder
  */

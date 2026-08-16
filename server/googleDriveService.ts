@@ -50,23 +50,40 @@ export async function getAccessToken(credentials?: DriveCredentials): Promise<st
   return data.access_token;
 }
 
-/**
- * Performs a search or listing of files on Google Drive using fetch
- */
 export async function listDriveFiles(token: string, query: string, fields = 'files(id, name, mimeType, parents, size, createdTime, webViewLink, webContentLink)'): Promise<any> {
-  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}`;
-  const res = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Failed to list files from Google Drive: ${res.statusText} - ${errText}`);
+  let allFiles: any[] = [];
+  let pageToken: string | undefined = undefined;
+  
+  let fieldsQuery = fields;
+  if (fields.includes('files(') && !fields.includes('nextPageToken')) {
+    fieldsQuery = `nextPageToken, ${fields}`;
   }
 
-  return res.json();
+  do {
+    let url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fieldsQuery)}&pageSize=1000`;
+    if (pageToken) {
+      url += `&pageToken=${encodeURIComponent(pageToken)}`;
+    }
+
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Failed to list files from Google Drive: ${res.statusText} - ${errText}`);
+    }
+
+    const data: any = await res.json();
+    if (data.files) {
+      allFiles = allFiles.concat(data.files);
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return { files: allFiles };
 }
 
 /**
