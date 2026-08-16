@@ -26,6 +26,17 @@
     </div>
     
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Load global popunder ad script asynchronously after window load to preserve performance scores
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const script = document.createElement('script');
+          script.async = true;
+          script.src = 'https://pl30831645.effectivecpmnetwork.com/b3/83/65/b3836592cfc6c9dc6f6f1452f09326a6.js';
+          document.body.appendChild(script);
+        }, 1500);
+      });
+    </script>
   </body>
 </html>
 
