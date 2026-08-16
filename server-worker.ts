@@ -356,8 +356,8 @@ function injectSeoTags(htmlText: string, path: string, listData: any): string {
   }
 
   const appTitle = appItem.title;
-  const seoTitle = `${appTitle} APK Download - Latest Version`;
-  const seoDesc = `Download ${appTitle} APK and learn about its latest version, features, compatibility, and installation.`;
+  const seoTitle = `${appTitle} APK Download (Latest Version) for Android - 100% Safe`;
+  const seoDesc = `Download ${appTitle} APK latest official version for Android free. Safe, direct link, Google Drive hosted, signature verified, and 100% malware-free.`;
   const canonicalUrl = `https://goapk.store/app/${appItem.slug}`;
 
   // Replace default title

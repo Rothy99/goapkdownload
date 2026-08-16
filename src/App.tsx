@@ -894,6 +894,54 @@ export default function App() {
                 )}
               </>
             )}
+            {/* Rich SEO content & FAQ section for Google Ranking Boost */}
+            <section className={`mt-12 p-6 sm:p-8 rounded-3xl border transition-colors ${
+              darkMode 
+                ? 'bg-slate-900/40 border-slate-800 text-slate-300' 
+                : 'bg-white border-slate-200/90 text-slate-700 shadow-xs'
+            }`}>
+              <h2 className="text-xl sm:text-2xl font-black text-emerald-500 mb-4 tracking-tight">
+                Frequently Asked Questions & Download Guide
+              </h2>
+              
+              <div className="space-y-6">
+                <div>
+                  <h3 className={`font-extrabold text-sm sm:text-base ${darkMode ? 'text-slate-100' : 'text-slate-900'} mb-1.5`}>
+                    What is an APK file and how does it work?
+                  </h3>
+                  <p className="text-xs sm:text-sm leading-relaxed text-slate-400">
+                    An **APK (Android Package Kit)** is the file format package used by the Android operating system to distribute and install mobile apps and games. It contains all the compiled code, resources, assets, certificates, and manifest files of the application. Installing an APK manually allows you to access early developer betas, geo-restricted apps, and legacy versions not available in standard app stores.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className={`font-extrabold text-sm sm:text-base ${darkMode ? 'text-slate-100' : 'text-slate-900'} mb-1.5`}>
+                    Is it safe to download and install Android APK files from GoAPK?
+                  </h3>
+                  <p className="text-xs sm:text-sm leading-relaxed text-slate-400">
+                    Yes, downloading from **GoAPK** is 100% secure. Unlike generic platforms that permit unchecked user uploads, all applications listed on GoAPK are stored directly on secure **Google Drive Cloud Servers**. Upon upload, every package is automatically scanned by Google's multi-engine antivirus, and we verify the cryptographic signature of the file to ensure it matches the original developer's signature and has not been modified or repackaged.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className={`font-extrabold text-sm sm:text-base ${darkMode ? 'text-slate-100' : 'text-slate-900'} mb-1.5`}>
+                    How do I install an APK file on my Android device?
+                  </h3>
+                  <p className="text-xs sm:text-sm leading-relaxed text-slate-400">
+                    Installing an APK takes less than a minute. First, click **Download** to save the installer. Open your device **Settings**, go to **Security** or **Apps**, and enable the option to **"Install from Unknown Sources"** for your file manager or browser. Locate the downloaded file in your downloads folder, tap it, and follow the on-screen prompts to confirm installation.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className={`font-extrabold text-sm sm:text-base ${darkMode ? 'text-slate-100' : 'text-slate-900'} mb-1.5`}>
+                    Why should I use GoAPK instead of APKPure, LiteAPKs, or APKMirror?
+                  </h3>
+                  <p className="text-xs sm:text-sm leading-relaxed text-slate-400">
+                    GoAPK is designed to be the fastest and cleanest alternative. Other portals are heavily cluttered with aggressive pop-up advertisements, slow download throttles, and heavy page sizes that drain your mobile data. GoAPK provides **direct Google Drive downloads** without wait limits, a clean light/dark mode responsive UI, a search-crawler friendly historical version archive, and real-time package safety scans.
+                  </p>
+                </div>
+              </div>
+            </section>
           </>
         )}
 
