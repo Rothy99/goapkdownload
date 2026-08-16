@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Logo } from './Logo';
 import { 
   Search, 
@@ -58,6 +58,11 @@ export const Header: React.FC<HeaderProps> = ({
         app.developer.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
       ).slice(0, 6);
+
+  const recommendedApps = useMemo(() => {
+    const trending = apps.filter(app => app.isTrending || app.isFeatured || app.rating >= 4.8);
+    return trending.length > 0 ? trending.slice(0, 5) : apps.slice(0, 5);
+  }, [apps]);
 
   useEffect(() => {
     function handleClickOutside(e: Event) {
@@ -167,11 +172,51 @@ export const Header: React.FC<HeaderProps> = ({
             </form>
 
             {/* Desktop Autocomplete Dropdown */}
-            {isSearchOpen && searchQuery.trim() !== '' && (
+            {isSearchOpen && (
               <div className={`absolute top-full left-0 right-0 mt-2 rounded-2xl shadow-2xl border overflow-hidden z-50 max-h-[70vh] overflow-y-auto touch-pan-y ${
                 darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
               }`}>
-                {filteredApps.length > 0 ? (
+                {searchQuery.trim() === '' ? (
+                  <>
+                    <div className={`p-2.5 text-[11px] font-bold tracking-wider uppercase border-b ${
+                      darkMode ? 'bg-slate-800/80 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'
+                    }`}>
+                      🔥 Popular Searches
+                    </div>
+                    <div className="divide-y divide-slate-700/30">
+                      {recommendedApps.map((app) => (
+                        <div
+                          key={app.id}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            onSelectApp(app);
+                            setIsSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                          className={`p-3 flex items-center gap-3 cursor-pointer transition-colors ${
+                            darkMode ? 'hover:bg-slate-700/60' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <img 
+                            src={app.icon} 
+                            alt={app.title} 
+                            className="w-10 h-10 rounded-xl object-cover shadow-xs flex-shrink-0" 
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-semibold truncate">{app.title}</h4>
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold ml-2">{app.size}</span>
+                            </div>
+                            <p className={`text-xs truncate ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                              {app.developer} • {app.category}
+                            </p>
+                          </div>
+                          <ChevronRight className={`w-4 h-4 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : filteredApps.length > 0 ? (
                   <>
                     <div className={`p-2.5 text-[11px] font-bold tracking-wider uppercase border-b ${
                       darkMode ? 'bg-slate-800/80 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'
@@ -357,11 +402,52 @@ export const Header: React.FC<HeaderProps> = ({
             </form>
 
             {/* Mobile Search Dropdown Results */}
-            {searchQuery.trim() !== '' && (
+            {isMobileSearchActive && (
               <div className={`absolute top-full left-0 right-0 shadow-2xl border-b border-x overflow-hidden z-50 max-h-[75vh] overflow-y-auto touch-pan-y ${
                 darkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
               }`}>
-                {filteredApps.length > 0 ? (
+                {searchQuery.trim() === '' ? (
+                  <>
+                    <div className={`p-3 text-[11px] font-bold tracking-wider uppercase border-b ${
+                      darkMode ? 'bg-slate-800/80 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'
+                    }`}>
+                      🔥 Popular Searches
+                    </div>
+                    <div className="divide-y divide-slate-700/30">
+                      {recommendedApps.map((app) => (
+                        <div
+                          key={app.id}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            onSelectApp(app);
+                            setIsMobileSearchActive(false);
+                            setIsSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                          className={`p-3.5 flex items-center gap-3 cursor-pointer transition-colors active:bg-emerald-500/10 ${
+                            darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <img 
+                            src={app.icon} 
+                            alt={app.title} 
+                            className="w-11 h-11 rounded-xl object-cover shadow-xs shrink-0" 
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-bold truncate">{app.title}</h4>
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-extrabold ml-2 shrink-0">{app.size}</span>
+                            </div>
+                            <p className={`text-xs truncate ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                              {app.developer} • {app.category}
+                            </p>
+                          </div>
+                          <ChevronRight className={`w-4 h-4 shrink-0 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : filteredApps.length > 0 ? (
                   <>
                     <div className={`p-3 text-[11px] font-bold tracking-wider uppercase border-b ${
                       darkMode ? 'bg-slate-800/80 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'
